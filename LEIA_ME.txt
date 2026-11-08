@@ -1,0 +1,9 @@
+MEGAFUT, APP PARA O CELULAR
+
+1. Suba TODOS os arquivos desta pasta (são 18, sem subpastas) na raiz do repositório.
+2. No GitHub: Settings, Pages, Source "Deploy from a branch", branch "main", pasta "/ (root)", Save.
+3. Abra o endereço no Safari (iPhone) ou no Chrome (Android) e adicione à tela de início.
+4. Abra o app uma vez com internet: ele baixa e guarda tudo (cerca de 25 MB) para funcionar sem rede.
+5. Para atualizar: substitua os arquivos pelos da pasta nova. O app avisa quando a versão nova chegar.
+
+Versão: 2c3464259e5a

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Megafut">
+<title>Megafut</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icone-192.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Big+Shoulders+Display:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --noite:#07140d; --gramado:#0d2618; --gramado2:#102d1d; --giz:#f3f0e6; --giz2:rgba(243,240,230,.72);
+  --giz3:rgba(243,240,230,.45); --linha:rgba(243,240,230,.14); --refletor:#ffc845; --refletor2:rgba(255,200,69,.16);
+  --vermelho:#ff6a55; --verde:#67d98a; --painel:rgba(6,18,11,.78); --raio:14px;
+  --titulo:"Big Shoulders Display", "Barlow Condensed", "Arial Narrow", sans-serif;
+  --texto:"Barlow", "Segoe UI", Roboto, Arial, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--texto);color:var(--giz);background:var(--noite);
+  background-image:
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255,214,120,.16), transparent 60%),
+    repeating-linear-gradient(180deg, var(--gramado) 0 46px, var(--gramado2) 46px 92px);
+  background-attachment:fixed;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+input,select{font:inherit;color:var(--giz);background:rgba(0,0,0,.35);border:1px solid var(--linha);border-radius:10px;padding:10px 12px;width:100%}
+select option{background:#0b1f14}
+#app{max-width:560px;margin:0 auto;min-height:100%;padding:calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 92px)}
+h1,h2,h3,.num{font-family:var(--titulo);letter-spacing:.02em;font-weight:800}
+h1{font-size:44px;line-height:.95;text-transform:uppercase}
+h2{font-size:26px;text-transform:uppercase;margin:18px 0 10px}
+h3{font-size:19px;text-transform:uppercase;margin:14px 0 8px;color:var(--giz2)}
+p{line-height:1.45}
+.sub{color:var(--giz2);font-size:14px}
+.minus{color:var(--giz3);font-size:12.5px;line-height:1.4}
+.cartao{background:var(--painel);border:1px solid var(--linha);border-radius:var(--raio);padding:14px;margin:10px 0;backdrop-filter:blur(6px)}
+.cartao.destaque{border-color:rgba(255,200,69,.45);box-shadow:0 0 0 1px rgba(255,200,69,.12),0 10px 40px rgba(0,0,0,.35)}
+.linha{display:flex;align-items:center;gap:10px}
+.entre{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.grade2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.escudo{flex:none;width:44px;height:44px;border-radius:50%;border:2px solid var(--giz);display:grid;place-items:center;
+  font-family:var(--titulo);font-weight:800;font-size:15px;letter-spacing:.04em;background:rgba(0,0,0,.25)}
+.escudo.p{width:30px;height:30px;font-size:11px;border-width:1.5px}
+.escudo.g{width:74px;height:74px;font-size:24px;border-width:3px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:12px;
+  background:var(--refletor);color:#1a1405;font-weight:700;font-size:16px;width:100%;min-height:48px}
+.btn.sec{background:rgba(243,240,230,.08);color:var(--giz);border:1px solid var(--linha)}
+.btn.peq{width:auto;min-height:38px;padding:8px 12px;font-size:14px}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.45}
+.chip{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:600;
+  background:rgba(243,240,230,.08);border:1px solid var(--linha);color:var(--giz2);white-space:nowrap}
+.chip.ok{color:var(--verde);border-color:rgba(103,217,138,.4)}
+.chip.al{color:var(--refletor);border-color:rgba(255,200,69,.4)}
+.chip.ruim{color:var(--vermelho);border-color:rgba(255,106,85,.4)}
+.abas{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin:8px 0;scrollbar-width:none}
+.abas::-webkit-scrollbar{display:none}
+.aba{padding:8px 12px;border-radius:999px;border:1px solid var(--linha);font-size:14px;white-space:nowrap;color:var(--giz2)}
+.aba.on{background:var(--giz);color:#0b1f14;font-weight:700}
+.lista>*{border-top:1px solid var(--linha)}
+.lista>*:first-child{border-top:0}
+.item{display:flex;align-items:center;gap:10px;padding:11px 2px;width:100%;text-align:left}
+.item .cresce{flex:1;min-width:0}
+.item .nome{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabela{width:100%;border-collapse:collapse;font-size:14px}
+.tabela th{font-weight:600;color:var(--giz3);font-size:11.5px;text-transform:uppercase;text-align:right;padding:6px 4px}
+.tabela td{padding:7px 4px;text-align:right;border-top:1px solid var(--linha);font-variant-numeric:tabular-nums}
+.tabela td:nth-child(2),.tabela th:nth-child(2){text-align:left}
+.tabela tr.eu td{background:var(--refletor2);color:var(--refletor);font-weight:700}
+.placar{font-family:var(--titulo);font-weight:900;font-size:64px;line-height:1;letter-spacing:.02em}
+.relogio{font-family:var(--titulo);font-weight:800;font-size:20px;color:var(--refletor)}
+.barra{height:6px;border-radius:6px;background:rgba(243,240,230,.12);overflow:hidden}
+.barra>i{display:block;height:100%;background:var(--giz)}
+.est{display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center;font-size:14px;margin:7px 0}
+.est .meio{text-align:center;color:var(--giz2);font-size:12.5px}
+.evento{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--linha);font-size:14.5px;animation:entra .35s ease both}
+.evento .m{flex:none;width:38px;font-family:var(--titulo);font-weight:800;color:var(--giz2)}
+.evento.gol{color:var(--refletor);font-weight:700}
+@keyframes entra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.flash{animation:flash 1.1s ease}
+@keyframes flash{0%{text-shadow:0 0 0 rgba(255,200,69,0)}30%{text-shadow:0 0 28px rgba(255,200,69,.9);color:var(--refletor)}100%{text-shadow:none}}
+nav#menu{position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(5,14,9,.94);border-top:1px solid var(--linha);
+  display:flex;justify-content:space-around;padding:6px 6px calc(env(safe-area-inset-bottom) + 6px);backdrop-filter:blur(10px)}
+nav#menu[hidden]{display:none}
+nav#menu button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;color:var(--giz3);padding:6px 0}
+nav#menu button svg{width:22px;height:22px}
+nav#menu button.on{color:var(--refletor)}
+.folha{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.folha>div{width:100%;max-width:560px;max-height:88vh;overflow:auto;background:#0a1d12;border:1px solid var(--linha);
+  border-radius:20px 20px 0 0;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);animation:sobe .25s ease}
+@keyframes sobe{from{transform:translateY(40px)}to{transform:none}}
+.carregando{min-height:70vh;display:grid;place-items:center;text-align:center}
+.anel{width:74px;height:74px;border-radius:50%;border:3px solid var(--linha);border-top-color:var(--refletor);animation:gira 1s linear infinite;margin:0 auto 18px}
+@keyframes gira{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:50;
+  background:var(--giz);color:#0b1f14;padding:10px 14px;border-radius:12px;font-weight:600;font-size:14px;max-width:92vw;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.campo{display:grid;gap:6px;margin:10px 0}
+.campo label{font-size:13px;color:var(--giz2)}
+.selo{font-size:11px;color:var(--giz3);border:1px dashed var(--linha);border-radius:8px;padding:6px 8px;margin-top:8px}
+.vazio{color:var(--giz3);text-align:center;padding:24px 8px}
+.pos{display:inline-block;min-width:36px;text-align:center;font-family:var(--titulo);font-weight:800;font-size:13px;
+  border-radius:6px;padding:2px 4px;background:rgba(243,240,230,.08)}
+.nivel{font-family:var(--titulo);font-weight:800;font-size:20px;min-width:36px;text-align:right}
+a{color:var(--refletor)}
+.mapa{width:100%;height:auto;display:block;margin:4px auto 0;max-height:62vh}
+.mapa path{stroke:rgba(243,240,230,.35);stroke-width:.5;transition:fill .2s}
+.mapa path.ctx{fill:rgba(243,240,230,.05);stroke:rgba(243,240,230,.12)}
+.mapa path.pais{fill:rgba(243,240,230,.16);cursor:pointer}
+.mapa path.pais.jogavel{fill:rgba(103,217,138,.32)}
+.mapa path.pais.on{fill:var(--refletor);stroke:#fff;stroke-width:.9}
+.liga{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px;margin:8px 0;border-radius:var(--raio);
+  background:var(--painel);border:1px solid var(--linha)}
+.liga .div{font-family:var(--titulo);font-weight:900;font-size:30px;color:var(--refletor);width:40px;text-align:center}
+.gramado{position:relative;width:100%;padding-top:132%;border-radius:16px;overflow:hidden;border:2px solid rgba(243,240,230,.5);
+  background:repeating-linear-gradient(180deg,#1d6b3a 0 9.09%,#1a6235 9.09% 18.18%)}
+.gramado .marcas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ficha{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;width:22%;z-index:2}
+.ficha .bola{width:42px;height:42px;border-radius:50%;background:#0b1f14;border:2px solid var(--giz);display:grid;place-items:center;
+  font-family:var(--titulo);font-weight:800;font-size:14px;box-shadow:0 3px 10px rgba(0,0,0,.45)}
+.ficha .rot{font-size:11px;font-weight:700;text-align:center;line-height:1.1;background:rgba(0,0,0,.55);padding:2px 5px;border-radius:6px;
+  max-width:112%;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ficha .vpos{font-size:9.5px;color:var(--giz2);font-weight:700}
+.ficha.sel .bola,.reserva.sel{border-color:var(--refletor);background:var(--refletor);color:#1a1405}
+.ficha.fora .bola{border-color:#ff9f43}
+.ficha.indisp .bola{border-color:var(--vermelho);opacity:.7}
+.ficha.vazia .bola{border-style:dashed;opacity:.6}
+.banco{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:6px}
+.reserva{display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:10px;border:1px solid var(--linha);background:rgba(0,0,0,.3);
+  font-size:12.5px;text-align:left;min-width:0}
+.reserva span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+</style>
+</head>
+<body>
+<main id="app"><div class="carregando"><div><div class="anel"></div><h1>Megafut</h1><p class="sub" id="progresso">Ligando os refletores</p></div></div></main>
+<nav id="menu" hidden></nav>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
