@@ -214,7 +214,7 @@ async function salvarAgora(forcar = false) {
 // ---------------------------------------------------------------------------
 const S = { inicio: null, estado: null, paises: null, pais: 0, partida: null, compAberta: null, abaMercado: "buscar",
   filtros: { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, faixa: "", nivel_min: 0, situacao: "", ordem: "ovr", na_verba: false, texto: "" }, opcoesMercado: null, saveExistente: null };
-const TELAS_COM_MENU = ["painel", "elenco", "jogos", "mercado", "clube"];
+const TELAS_COM_MENU = ["painel", "elenco", "jogos", "mercado", "clube", "portal"];
 function ir(nome) { if (location.hash !== "#" + nome) location.hash = nome; else desenhar(); }
 window.addEventListener("hashchange", () => desenhar());
 function telaAtual() { return (location.hash || "#inicio").slice(1) || "inicio"; }
@@ -225,13 +225,16 @@ const ICONES = {
   jogos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18M12 4v16"/><circle cx="12" cy="12" r="3"/></svg>',
   mercado: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h11l-3-3M20 17H9l3 3"/></svg>',
   clube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>',
+  portal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c1-4 3.8-6 7-6s6 2 7 6"/><path d="M17.5 4.5l2-1.5"/></svg>',
 };
 function desenharMenu(tela) {
   if (!S.estado || !TELAS_COM_MENU.includes(tela)) { menu.hidden = true; return; }
   menu.hidden = false;
-  const nomes = { painel: "Painel", elenco: "Elenco", jogos: "Jogos", mercado: "Mercado", clube: "Clube" };
+  const nomes = { painel: "Painel", elenco: "Elenco", jogos: "Jogos", mercado: "Mercado", clube: "Clube", portal: "Portal" };
   const marca = S.estado.propostas ? " •" : "";
-  menu.innerHTML = TELAS_COM_MENU.map((t) => `<button class="${t === tela ? "on" : ""}" data-ir="${t}">${ICONES[t]}<span>${nomes[t]}${t === "mercado" ? marca : ""}</span></button>`).join("");
+  const pt = S.estado.portal || {};
+  const marcaPortal = pt.desempregado || pt.coletiva || pt.ofertas || pt.patrocinio || pt.risco === "alto" ? " •" : "";
+  menu.innerHTML = TELAS_COM_MENU.map((t) => `<button class="${t === tela ? "on" : ""}" data-ir="${t}">${ICONES[t]}<span>${nomes[t]}${t === "mercado" ? marca : t === "portal" ? marcaPortal : ""}</span></button>`).join("");
   menu.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click", () => ir(b.dataset.ir)));
 }
 
@@ -251,6 +254,7 @@ async function desenhar() {
     if (tela === "jogos") return telaJogos();
     if (tela === "mercado") return telaMercado();
     if (tela === "clube") return telaClube();
+    if (tela === "portal") return telaPortal();
     return telaInicio();
   } catch (e) {
     app.innerHTML = `<div class="cartao"><h3>Algo deu errado</h3><p class="minus">${esc(e.message)}</p></div>`;
@@ -457,13 +461,20 @@ function telaPainel() {
     ${cartaoJogo(e.proximo, true)}
     <div class="grade2"><button class="btn" id="avancar">${e.proximo ? "Ir para o jogo" : "Avançar"}</button><button class="btn sec" id="dia">Avançar um dia</button></div>
     ${e.propostas ? `<button class="cartao destaque item" id="props" style="margin-top:12px"><div class="cresce"><strong>${e.propostas} proposta${e.propostas > 1 ? "s" : ""} esperando resposta</strong><div class="minus">Mercado, Propostas</div></div>${chip("Ver", "al")}</button>` : ""}
+    ${(() => { const pt = e.portal || {}; const itens = [];
+      if (pt.desempregado) itens.push("Você está sem clube: escolha uma proposta");
+      if (pt.coletiva) itens.push("Coletiva de imprensa antes do próximo jogo");
+      if (pt.ofertas && !pt.desempregado) itens.push(pt.ofertas + " proposta" + (pt.ofertas > 1 ? "s" : "") + " de outros clubes");
+      if (pt.patrocinio) itens.push("Patrocinadores esperando sua escolha");
+      if (pt.risco === "alto") itens.push("Diretoria insatisfeita: risco alto de demissão");
+      return itens.length ? `<button class="cartao destaque item" id="irportal" style="margin-top:12px"><div class="cresce"><strong>Portal do treinador</strong><div class="minus">${itens.map(esc).join(" · ")}</div></div>${chip("Abrir", "al")}</button>` : ""; })()}
     ${al.contratos ? `<div class="cartao"><strong>${al.contratos} contrato${al.contratos > 1 ? "s" : ""} terminando em 31/12</strong><p class="minus">Sem renovação, o jogador sai no fim do ano. Elenco, toque no jogador, Renovar.</p></div>` : ""}
     ${(al.lesionados || []).length ? `<p class="minus" style="margin-top:6px">No departamento médico: ${esc(al.lesionados.join(", "))}</p>` : ""}
     ${e.tabela && e.tabela.length ? `<h3>${esc(e.clube.liga)}</h3><div class="cartao">${tabelaHtml(e.tabela, e.clube.id, true)}
       <button class="btn sec peq" id="tab" style="margin-top:8px">Tabela completa</button></div>` : ""}
     <div class="grade2" style="margin-top:4px">
       <div class="cartao"><p class="minus">Torcida</p><div class="entre"><strong>${esc(e.torcida.rotulo)}</strong><span class="num" style="font-size:22px">${e.torcida.valor}</span></div><div class="barra"><i style="width:${e.torcida.valor}%"></i></div></div>
-      <div class="cartao"><p class="minus">Diretoria</p><div class="entre"><strong>${esc(e.diretoria.rotulo)}</strong><span class="num" style="font-size:22px">${e.diretoria.valor}</span></div><div class="barra"><i style="width:${e.diretoria.valor}%"></i></div></div>
+      <div class="cartao"><p class="minus">Confiança da diretoria</p><div class="entre"><strong>Risco ${esc((e.portal || {}).risco || "baixo")}</strong><span class="num" style="font-size:22px">${(e.portal || {}).confianca ?? e.diretoria.valor}</span></div><div class="barra"><i style="width:${(e.portal || {}).confianca ?? e.diretoria.valor}%"></i></div></div>
     </div>
     <div class="cartao"><div class="entre"><span class="sub">Objetivo</span><strong style="text-align:right">${esc(e.objetivo)}</strong></div>
       <div class="entre"><span class="sub">Caixa</span><strong>${esc(e.financas.caixa)}</strong></div>
@@ -476,6 +487,7 @@ function telaPainel() {
   const $ = (id) => document.getElementById(id);
   $("avancar").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
+  if ($("irportal")) $("irportal").onclick = () => ir("portal");
   if ($("props")) $("props").onclick = () => { S.abaMercado = "propostas"; ir("mercado"); };
   if ($("tab")) $("tab").onclick = () => { S.compAberta = e.liga_id; ir("jogos"); };
 }
@@ -498,7 +510,7 @@ async function avancar(modo) {
     else if (r.fim_de_temporada) { mostrarFimDeTemporada(r.fim_de_temporada); ir("painel"); }
     else { ir("painel"); if (r.noticias.length) aviso(r.noticias[r.noticias.length - 1]); }
     salvarAgora(Boolean(r.partida || r.fim_de_temporada));
-  } catch (e) { aviso(e.message); ir("painel"); }
+  } catch (e) { aviso(e.message); ir(/sem clube/.test(e.message) ? "portal" : "painel"); }
 }
 function mostrarFimDeTemporada(f) {
   const f2 = folha(`<h2>Fim da temporada ${f.ano}</h2>
@@ -1086,6 +1098,67 @@ async function responderProposta(id, acao, p) {
 // ---------------------------------------------------------------------------
 // Clube
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Portal do treinador
+// ---------------------------------------------------------------------------
+const COR_SETOR = { dm: "ruim", diretoria: "al", imprensa: "", patrocinio: "ok", base: "ok", financeiro: "al", carreira: "ok" };
+async function telaPortal() {
+  carregando("Abrindo o portal");
+  const p = await api("portal");
+  S.estado = await api("estado");
+  desenharMenu("portal");
+  const corRisco = p.risco === "alto" ? "ruim" : p.risco === "médio" ? "al" : "ok";
+  const col = p.coletiva;
+  app.innerHTML = `
+    <div class="topo"><div><h1>Portal</h1><p class="sub">${esc(p.tecnico)} · ${p.clube ? esc(p.clube) : "sem clube"}</p></div></div>
+    ${p.desempregado ? `<div class="cartao destaque"><strong>Você está sem clube.</strong><p class="sub" style="margin-top:4px">Escolha uma das propostas abaixo para seguir a carreira.</p></div>` : ""}
+    <div class="cartao">
+      <div class="entre"><span class="sub">Reputação de técnico</span><strong>${p.reputacao}</strong></div>
+      ${p.desempregado ? "" : `<div class="entre" style="margin-top:6px"><span class="sub">Confiança da diretoria</span><strong>${p.confianca}%</strong></div>
+      <div class="barra" style="margin:6px 0"><i style="width:${p.confianca}%"></i></div>
+      <div class="entre"><span class="sub">Risco de demissão</span>${chip(p.risco, corRisco)}</div>`}
+    </div>
+    ${p.ofertas_emprego.length ? `<h3>Propostas de emprego</h3><div class="cartao lista">${p.ofertas_emprego.map((o) => `<div class="item" style="display:block">
+      <div class="entre"><strong>${esc(o.nome)}</strong><span class="nivel ${corOvr(o.forca)}">${o.forca}</span></div>
+      <div class="minus">${esc(o.pais)} · reputação ${o.reputacao} · o clube ${esc(o.motivo)} · vale até ${esc(o.validade)}</div>
+      <button class="btn peq" data-emprego="${o.clube}" data-nome="${esc(o.nome)}" style="margin-top:8px">Aceitar</button></div>`).join("")}</div>` : ""}
+    ${col ? `<h3>Sala de imprensa</h3><div class="cartao destaque" id="coletiva"><p class="sub">Coletiva antes do jogo contra o ${esc(col.rival)} (${esc(col.comp)}${col.data ? ", " + esc(col.data) : ""}). Suas respostas mexem com o elenco, a torcida e a diretoria.</p>
+      ${col.perguntas.map((q, i) => `<div style="margin-top:12px"><strong>${esc(q.texto)}</strong>${q.opcoes.map((o, k) => `<label class="linha" style="margin:6px 0;align-items:flex-start;gap:8px"><input type="radio" name="q${i}" value="${k}" style="width:auto;margin-top:3px" ${k === 1 ? "checked" : ""}><span>${esc(o.texto)}</span></label>`).join("")}</div>`).join("")}
+      <button class="btn" id="responder" style="margin-top:10px">Responder</button></div>` : ""}
+    <h3>Comunicações internas</h3>
+    <div class="cartao lista" style="max-height:380px;overflow:auto">${p.comunicados.map((c) => `<div class="item" style="display:block"><div class="minus">${esc(c.data)} ${chip(c.setor_nome, COR_SETOR[c.setor] || "")}</div><div${c.importante ? ' style="font-weight:600"' : ""}>${esc(c.texto)}</div></div>`).join("") || `<div class="vazio">Nada por enquanto.</div>`}</div>
+    ${p.metas.length ? `<h3>Metas da temporada</h3><div class="cartao lista">${p.metas.map((m) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(m.comp)}</strong>${chip(m.status, m.status === "batida" ? "ok" : m.status === "não cumprida" ? "ruim" : "")}</div>
+      <div class="minus">${esc(m.texto)} · bônus da diretoria ${esc(m.bonus)}${m.posicao ? " · terminou em " + m.posicao + "º" : ""}</div></div>`).join("")}</div>` : ""}
+    <h3>Patrocinadores</h3>
+    <div class="cartao lista">${p.patrocinadores.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(x.nome)}</strong><strong style="color:#9be8b4">${esc(x.anual)}/ano</strong></div><div class="minus">até ${x.ate} · ${esc(x.bonus)} por meta batida</div></div>`).join("") || `<div class="vazio">Nenhum patrocinador assinado.</div>`}</div>
+    ${p.ofertas_patrocinio.length ? `<p class="sub" style="margin:8px 0">Escolha até ${3 - p.patrocinadores.length} das ofertas:</p><div class="cartao lista">${p.ofertas_patrocinio.map((o) => `<div class="item" style="display:block">
+      <div class="entre"><strong>${esc(o.nome)}</strong><strong>${esc(o.anual)}/ano</strong></div>
+      <div class="minus">${o.temporadas} temporada${o.temporadas > 1 ? "s" : ""} (até ${o.ate}) · bônus de ${esc(o.bonus)} por meta batida</div>
+      <button class="btn peq" data-patro="${o.id}" style="margin-top:8px">Assinar</button></div>`).join("")}</div>` : ""}
+    <h3>Carreira</h3>
+    <div class="cartao"><div class="entre"><span class="sub">Jogos</span><strong>${p.total.j}</strong></div>
+      <div class="entre"><span class="sub">Vitórias, empates e derrotas</span><strong>${p.total.v}, ${p.total.e}, ${p.total.d}</strong></div>
+      <div class="entre"><span class="sub">Aproveitamento</span><strong>${p.total.aproveitamento}%</strong></div>
+      <div class="entre"><span class="sub">Títulos</span><strong>${p.total.titulos}</strong></div></div>
+    <div class="cartao lista">${p.passagens.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(x.nome)}</strong><span class="minus">${esc(x.inicio)} a ${esc(x.fim)}</span></div>
+      <div class="minus">${x.j} jogos · ${x.v}V ${x.e}E ${x.d}D · ${x.aproveitamento}%${x.saida ? " · " + esc(x.saida) : ""}</div>
+      ${x.titulos.length ? `<div style="margin-top:4px">${x.titulos.map((t) => `<span class="traco bom">${esc(t)}</span>`).join("")}</div>` : ""}</div>`).join("")}</div>
+    <p class="minus">${esc(p.aviso)}</p>`;
+  app.querySelectorAll("[data-patro]").forEach((b) => b.onclick = async () => { const r = await api("patrocinio", { oferta: +b.dataset.patro }); aviso(r.texto || r.erro); telaPortal(); });
+  app.querySelectorAll("[data-emprego]").forEach((b) => b.onclick = () => {
+    const f = folha(`<h2>Assumir o ${b.dataset.nome}?</h2><p class="sub">${p.desempregado ? "" : "Você deixa o clube atual agora. "}O elenco, as metas e o caixa passam a ser os do novo clube. A carreira continua contando.</p>
+      <div class="grade2" style="margin-top:12px"><button class="btn" id="sim">Assinar</button><button class="btn sec" id="nao">Agora não</button></div>`);
+    f.querySelector("#nao").onclick = fecharFolha;
+    f.querySelector("#sim").onclick = async () => { const r = await api("aceitar_emprego", { clube: +b.dataset.emprego }); fecharFolha(); aviso(r.texto || r.erro); if (r.estado) S.estado = r.estado; telaPortal(); };
+  });
+  const rb = app.querySelector("#responder");
+  if (rb) rb.onclick = async () => {
+    const respostas = col.perguntas.map((q, i) => +((app.querySelector(`input[name=q${i}]:checked`) || {}).value || 1));
+    const r = await api("coletiva", { respostas });
+    folha(`<h2>Coletiva encerrada</h2><p class="sub">${esc(r.texto || r.erro)}</p><button class="btn" id="okc" style="margin-top:12px">Fechar</button>`).querySelector("#okc").onclick = () => { fecharFolha(); telaPortal(); };
+  };
+}
+
 async function telaClube() {
   const e = S.estado = await api("estado");
   const campeoes = await api("campeoes");
@@ -1152,6 +1225,7 @@ async function desenharGestao() {
       <div class="entre"><strong>${esc(a.nome)}</strong><span class="nivel">${a.nivel}<span class="minus">/10</span></span></div>
       <div class="barra" style="margin:4px 0"><i style="width:${a.nivel * 10}%"></i></div>
       <div class="minus">${esc(a.descricao)}</div>
+      <div class="minus" style="margin-top:3px">Custo mensal agora ${esc(a.mensal)}${a.custo ? " · no próximo nível " + esc(a.mensal_proximo) : ""}</div>
       ${a.custo ? `<button class="btn ${a.pode ? "" : "sec"} peq" data-inv="${a.id}" style="margin-top:8px" ${a.pode ? "" : "disabled"}>Subir para ${a.nivel + 1} · ${esc(a.custo)}</button>` : `<p class="chip ok" style="margin-top:6px">Nível máximo</p>`}</div>`).join("")}</div>
     <h3>Peneira da base</h3>
     <div class="cartao"><p class="sub">Olheiros e estrutura da base decidem quantos garotos aparecem e o quanto podem crescer. Nomes gerados pelo jogo, de acordo com o país.</p>
