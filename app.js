@@ -130,14 +130,24 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+const VERSAO_APP = "e2b6e4656fe6";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-  navigator.serviceWorker.register("./sw.js").then((reg) => {
+  const tinhaControle = Boolean(navigator.serviceWorker.controller);
+  let recarregou = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // versão nova assumiu: recarrega sozinho (menos no meio de um jogo ao vivo)
+    if (!tinhaControle || recarregou) return;
+    if (telaAtual() === "aovivo") { aviso("Atualização do Megafut pronta: ela entra quando o jogo acabar."); return; }
+    recarregou = true;
+    aviso("Megafut atualizado. Recarregando");
+    setTimeout(() => location.reload(), 900);
+  });
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
     reg.addEventListener("updatefound", () => {
       const novo = reg.installing;
-      if (!novo) return;
-      novo.addEventListener("statechange", () => {
-        if (novo.state === "installed" && navigator.serviceWorker.controller) aviso("Nova versão do Megafut baixada. Feche e abra o app para usar.");
-      });
+      if (novo && navigator.serviceWorker.controller) aviso("Baixando a versão nova do Megafut");
     });
   }).catch(() => {});
 }
@@ -161,17 +171,24 @@ function local(chave, valor) {
   } catch (e) { return null; }
   return null;
 }
-async function lerSaveDoBanco() {
+// Dois espaços de carreira: o 1 usa as chaves antigas (saves de antes continuam valendo)
+const SLOT = {
+  idb: (n) => n === 2 ? "carreira2" : "carreira",
+  texto: (n) => n === 2 ? "megafut_save2" : "megafut_save",
+  rotulo: (n) => n === 2 ? "megafut_rotulo2" : "megafut_rotulo",
+  doc: (n) => n === 2 ? "megafut2" : "megafut",
+};
+async function lerSaveDoBanco(slot = 1) {
   await Promise.race([bancoPronto, new Promise((r) => setTimeout(r, 10000))]);
   if (!banco || !usuarioId) return null;
   try {
     const col = banco.collection("data/users/" + usuarioId);
-    const meta = await col.doc("megafut_meta").get();
+    const meta = await col.doc(SLOT.doc(slot) + "_meta").get();
     if (!meta.exists) return null;
     const m = meta.data();
     const partes = [];
     for (let i = 0; i < m.partes; i++) {
-      const p = await col.doc("megafut_parte_" + i).get();
+      const p = await col.doc(SLOT.doc(slot) + "_parte_" + i).get();
       if (!p.exists) return null;
       partes.push(p.data().texto);
     }
@@ -179,10 +196,11 @@ async function lerSaveDoBanco() {
   } catch (e) { return null; }
 }
 let salvando = false;
-async function gravarSave(texto, rotulo) {
-  local("megafut_save", texto);
-  local("megafut_rotulo", rotulo);
-  const noAparelho = await idbGravar("carreira", { texto, rotulo, quando: new Date().toISOString() });
+async function gravarSave(texto, rotulo, slot = S.slot || 1) {
+  local(SLOT.texto(slot), texto);
+  local(SLOT.rotulo(slot), rotulo);
+  S.saves[slot] = { texto, rotulo, quando: new Date().toISOString() };
+  const noAparelho = await idbGravar(SLOT.idb(slot), S.saves[slot]);
   if (EH_APP) return noAparelho;
   if (!banco || !usuarioId || salvando) return false;
   salvando = true;
@@ -190,8 +208,8 @@ async function gravarSave(texto, rotulo) {
     const col = banco.collection("data/users/" + usuarioId);
     const partes = [];
     for (let i = 0; i < texto.length; i += PARTE) partes.push(texto.slice(i, i + PARTE));
-    for (let i = 0; i < partes.length; i++) await col.doc("megafut_parte_" + i).set({ texto: partes[i] });
-    await col.doc("megafut_meta").set({ partes: partes.length, rotulo, quando: new Date().toISOString() });
+    for (let i = 0; i < partes.length; i++) await col.doc(SLOT.doc(slot) + "_parte_" + i).set({ texto: partes[i] });
+    await col.doc(SLOT.doc(slot) + "_meta").set({ partes: partes.length, rotulo, quando: new Date().toISOString() });
     return true;
   } catch (e) {
     return false;
@@ -213,7 +231,7 @@ async function salvarAgora(forcar = false) {
 // Estado da tela e navegação
 // ---------------------------------------------------------------------------
 const S = { inicio: null, estado: null, paises: null, pais: 0, partida: null, compAberta: null, abaMercado: "buscar",
-  filtros: { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, faixa: "", nivel_min: 0, situacao: "", ordem: "ovr", na_verba: false, texto: "" }, opcoesMercado: null, saveExistente: null };
+  filtros: { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, faixa: "", nivel_min: 0, situacao: "", ordem: "ovr", na_verba: false, texto: "" }, opcoesMercado: null, saveExistente: null, saves: { 1: null, 2: null }, slot: +(localStorage.getItem("megafut_slot") || 1) };
 const TELAS_COM_MENU = ["painel", "elenco", "jogos", "mercado", "clube", "portal"];
 function ir(nome) { if (location.hash !== "#" + nome) location.hash = nome; else desenhar(); }
 window.addEventListener("hashchange", () => desenhar());
@@ -264,23 +282,26 @@ async function desenhar() {
 
 async function iniciarApp() {
   try { S.inicio = await api("inicio"); } catch (e) { S.inicio = null; }
-  const localTexto = local("megafut_save");
-  if (localTexto) S.saveExistente = { texto: localTexto, rotulo: local("megafut_rotulo") || "Carreira salva" };
-  const doAparelho = await idbLer("carreira");
-  if (doAparelho && doAparelho.texto && (!S.saveExistente || doAparelho.texto.length >= S.saveExistente.texto.length || !localTexto))
-    S.saveExistente = { texto: doAparelho.texto, rotulo: doAparelho.rotulo || "Carreira salva", quando: doAparelho.quando };
+  for (const n of [1, 2]) {
+    const localTexto = local(SLOT.texto(n));
+    let melhor = localTexto ? { texto: localTexto, rotulo: local(SLOT.rotulo(n)) || "Carreira salva" } : null;
+    const doAparelho = await idbLer(SLOT.idb(n));
+    if (doAparelho && doAparelho.texto && (!melhor || doAparelho.texto.length >= melhor.texto.length))
+      melhor = { texto: doAparelho.texto, rotulo: doAparelho.rotulo || "Carreira salva", quando: doAparelho.quando };
+    S.saves[n] = melhor;
+  }
   desenhar();
-  lerSaveDoBanco().then((s) => {
-    if (s && (!S.saveExistente || s.texto.length)) { S.saveExistente = s; if (telaAtual() === "inicio" && !S.estado) desenhar(); }
+  for (const n of [1, 2]) lerSaveDoBanco(n).then((s) => {
+    if (s && s.texto && (!S.saves[n] || s.texto.length)) { S.saves[n] = s; if (telaAtual() === "inicio" && !S.estado) desenhar(); }
   });
 }
+function usarSlot(n) { S.slot = n; try { localStorage.setItem("megafut_slot", String(n)); } catch (e) { } }
 
 // ---------------------------------------------------------------------------
 // Início
 // ---------------------------------------------------------------------------
 function telaInicio() {
   const i = S.inicio || {};
-  const save = S.saveExistente;
   app.innerHTML = `
     <div style="padding-top:28px">
       <p class="chip al">Modo carreira 2026</p>
@@ -288,10 +309,13 @@ function telaInicio() {
       <p class="sub">${i.clubes || "..."} clubes de ${i.paises || "..."} países, todos jogando ao mesmo tempo. A temporada 2026 começa em aberto: participantes reais, resultados decididos em campo.</p>
     </div>
     ${S.estado ? `<button class="btn" id="voltar" style="margin-top:22px">Voltar para a carreira</button>` : ""}
-    ${save && !S.estado ? `<div class="cartao destaque"><p class="minus">Carreira salva</p><h3 style="margin:4px 0 12px;color:var(--giz)">${esc(save.rotulo)}</h3>
-      <button class="btn" id="continuar">Continuar</button></div>` : ""}
-    <div class="cartao"><button class="btn ${save ? "sec" : ""}" id="nova">Nova carreira</button>
-      <p class="minus" style="margin-top:10px">${i.jogaveis || 0} clubes já têm elenco real com fonte e podem ser assumidos. Os outros estão em pesquisa.</p></div>
+    ${[1, 2].map((n) => { const sv = S.saves[n]; return `<div class="cartao ${sv ? "destaque" : ""}">
+      <p class="minus">Carreira ${n}${S.estado && S.slot === n ? " · aberta agora" : ""}</p>
+      ${sv ? `<h3 style="margin:4px 0 12px;color:var(--giz)">${esc(sv.rotulo)}</h3>${sv.quando ? `<p class="minus" style="margin:-6px 0 10px">Salva em ${esc(new Date(sv.quando).toLocaleString("pt-BR"))}</p>` : ""}
+        <div class="grade2"><button class="btn" data-continuar="${n}">Continuar</button><button class="btn sec" data-nova="${n}">Nova aqui</button></div>`
+      : `<h3 style="margin:4px 0 12px;color:var(--giz3)">Espaço livre</h3><button class="btn ${S.saves[1] || S.saves[2] ? "sec" : ""}" data-nova="${n}">Nova carreira</button>`}
+    </div>`; }).join("")}
+    <p class="minus" style="margin:6px 0 12px">${i.jogaveis || 0} clubes já têm elenco real com fonte e podem ser assumidos. Os outros estão em pesquisa.</p>
     <div class="grade2">
       <button class="btn sec" id="dados">Situação dos dados</button>
       <button class="btn sec" id="importar">Colar um save</button>
@@ -299,8 +323,25 @@ function telaInicio() {
     <p class="minus" style="margin-top:16px">Atributos, valores, salários, contratos e orçamentos são estimativas do Megafut e aparecem marcados. Escudo oficial não é usado: cada clube aparece com um selo de giz com a sigla.</p>`;
   const $ = (id) => document.getElementById(id);
   if ($("voltar")) $("voltar").onclick = () => ir("painel");
-  if ($("continuar")) $("continuar").onclick = () => carregarSave(save.texto);
-  $("nova").onclick = () => {
+  app.querySelectorAll("[data-continuar]").forEach((b) => b.onclick = async () => {
+    const n = +b.dataset.continuar;
+    if (S.estado && S.slot === n) { ir("painel"); return; }
+    if (S.estado) await salvarAgora(true);
+    usarSlot(n); carregarSave(S.saves[n].texto);
+  });
+  app.querySelectorAll("[data-nova]").forEach((b) => b.onclick = async () => {
+    const n = +b.dataset.nova;
+    if (S.estado) await salvarAgora(true);
+    if (S.saves[n]) {
+      const c = folha(`<h2>Substituir a carreira ${n}?</h2><p class="sub">${esc(S.saves[n].rotulo)} será apagada quando a nova carreira for salva. Se quiser guardar, use antes Clube, Baixar save.</p>
+        <div class="grade2" style="margin-top:12px"><button class="btn" id="simn">Começar do zero</button><button class="btn sec" id="naon">Cancelar</button></div>`);
+      c.querySelector("#naon").onclick = fecharFolha;
+      c.querySelector("#simn").onclick = () => { fecharFolha(); usarSlot(n); pedirNomeDoTecnico(); };
+      return;
+    }
+    usarSlot(n); pedirNomeDoTecnico();
+  });
+  const pedirNomeDoTecnico = () => {
     const f = folha(`<h2>Seu nome de técnico</h2><p class="sub">É assim que a imprensa, a torcida e a diretoria vão te chamar.</p>
       <div class="campo"><label>Nome</label><input id="nome" maxlength="40" autocomplete="name" value="${esc(local("megafut_tecnico") || "")}" placeholder="Seu nome"></div>
       <button class="btn" id="ok">Escolher o clube</button>`);
@@ -317,7 +358,10 @@ function telaInicio() {
     const f = folha(`<h2>Trazer uma carreira</h2><p class="sub">Abra o arquivo baixado em Clube, Baixar save, ou cole o texto copiado em Clube, Copiar save.</p>
       <label class="btn" style="margin:12px 0">Abrir arquivo de save<input type="file" id="arq" accept=".txt,.megafut,text/plain" style="display:none"></label>
       <textarea id="txt" placeholder="ou cole aqui o texto do save" style="width:100%;height:140px;margin:0 0 12px;background:rgba(0,0,0,.35);color:var(--giz);border:1px solid var(--linha);border-radius:10px;padding:10px"></textarea>
+      <div class="campo"><label>Guardar em</label><select id="slotimp"><option value="1">Carreira 1${S.saves[1] ? " (substitui " + esc(S.saves[1].rotulo) + ")" : ""}</option><option value="2" ${S.saves[1] && !S.saves[2] ? "selected" : ""}>Carreira 2${S.saves[2] ? " (substitui " + esc(S.saves[2].rotulo) + ")" : ""}</option></select></div>
       <button class="btn sec" id="ok">Carregar texto colado</button>`);
+    f.querySelector("#slotimp").onchange = (ev) => usarSlot(+ev.target.value);
+    usarSlot(+f.querySelector("#slotimp").value);
     f.querySelector("#ok").onclick = () => { const t = f.querySelector("#txt").value.trim(); if (t) carregarSave(t); };
     f.querySelector("#arq").onchange = async (ev) => {
       const arquivo = ev.target.files && ev.target.files[0];
@@ -329,7 +373,7 @@ function telaInicio() {
 }
 async function carregarSave(texto) {
   carregando("Abrindo a carreira");
-  try { S.estado = await api("carregar", { texto }); ir("painel"); }
+  try { S.estado = await api("carregar", { texto }); salvarAgora(true); ir("painel"); }
   catch (e) { aviso("Save inválido: " + e.message); ir("inicio"); }
 }
 
@@ -458,7 +502,7 @@ async function abrirResumo(chave) {
   if (b) b.onclick = async () => {
     fecharFolha();
     carregando("Montando o mundo: todas as ligas, copas e mercados");
-    try { S.estado = await api("nova", { chave, tecnico: S.tecnico || "" }); local("megafut_save", null); salvarAgora(true); ir("painel"); }
+    try { S.estado = await api("nova", { chave, tecnico: S.tecnico || "" }); local(SLOT.texto(S.slot || 1), null); salvarAgora(true); ir("painel"); }
     catch (e) { aviso(e.message); ir("escolha"); }
   };
 }
@@ -522,7 +566,7 @@ function telaPainel() {
   if ($("props")) $("props").onclick = () => { S.abaMercado = "propostas"; ir("mercado"); };
   if ($("tab")) $("tab").onclick = () => { S.compAberta = e.liga_id; ir("jogos"); };
 }
-const TIPO_NOTICIA = { lesao: ["DM", "ruim"], financas: ["Finanças", "al"], titulo: ["Título", "ok"], base: ["Base", "ok"], mercado: ["Mercado", ""], competicao: ["Competição", ""] };
+const TIPO_NOTICIA = { bastidores: ["Bastidores", "al"], carreira: ["Técnicos", ""], lesao: ["DM", "ruim"], financas: ["Finanças", "al"], titulo: ["Título", "ok"], base: ["Base", "ok"], mercado: ["Mercado", ""], competicao: ["Competição", ""] };
 function itemNoticia(n) {
   const t = TIPO_NOTICIA[n.tipo];
   return `<div class="item" style="display:block"><div class="minus">${esc(n.data)}${t ? " " + chip(t[0], t[1]) : ""}</div><div>${esc(n.texto)}</div></div>`;
@@ -579,6 +623,7 @@ function telaPartida() {
       ${r && r.classico ? `<p class="chip al" style="margin-top:10px">${esc(r.classico.apelido)}</p>` : ""}
     </div>
     <div class="grade2"><button class="btn sec" id="pular">Ver o final</button><button class="btn sec" id="sair">Voltar ao painel</button></div>
+    ${p.assistida ? "" : `<p class="minus" style="margin-top:8px;text-align:center">Jogo simulado pelo auxiliar. Para fazer trocas e mudar a formação, use "Ir para o jogo ao vivo" no Painel.</p>`}
     <div id="lances" class="cartao" style="margin-top:12px"></div>
     <div id="depois"></div>`;
   document.getElementById("sair").onclick = () => { S.partida = null; ir("painel"); if (S.fim) mostrarFimDeTemporada(S.fim); S.fim = null; };
@@ -642,6 +687,28 @@ function comemorarGol(clube, texto) {
   setTimeout(() => camada.remove(), 1900);
 }
 
+function apito(titulo, sub) {
+  const c = document.createElement("div");
+  c.className = "apito";
+  c.innerHTML = `<div class="apito-caixa"><div class="apito-ico">◉</div><div class="apito-t">${esc(titulo)}</div><div class="apito-s">${esc(sub || "")}</div></div>`;
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 1700);
+}
+function cartaoNaTela(cor, texto) {
+  const c = document.createElement("div");
+  c.className = "cartaotela";
+  c.innerHTML = `<div class="cartaozinho ${cor}"></div><div class="faixa-txt">${esc(texto)}</div>`;
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 1600);
+}
+function faixaNaTela(titulo, texto) {
+  const c = document.createElement("div");
+  c.className = "faixatela";
+  c.innerHTML = `<strong>⇄ ${esc(titulo)}</strong><span>${esc(texto)}</span>`;
+  document.body.appendChild(c);
+  setTimeout(() => c.remove(), 1800);
+}
+
 // ---------------------------------------------------------------------------
 // Jogo ao vivo
 // ---------------------------------------------------------------------------
@@ -661,6 +728,14 @@ async function telaAoVivo() {
       </div>
       <div class="barra" style="margin-top:10px"><i id="progresso" style="width:0%"></i></div>
       <p class="minus" id="numeros" style="margin-top:6px"></p>
+    </div>
+    <div class="minicampo" id="minicampo">
+      <svg viewBox="0 0 100 64" preserveAspectRatio="none" aria-hidden="true"><rect x="1" y="1" width="98" height="62" rx="2" fill="none" stroke="rgba(243,240,230,.5)" stroke-width=".5"/>
+        <line x1="50" y1="1" x2="50" y2="63" stroke="rgba(243,240,230,.5)" stroke-width=".5"/><circle cx="50" cy="32" r="8" fill="none" stroke="rgba(243,240,230,.5)" stroke-width=".5"/>
+        <rect x="1" y="18" width="13" height="28" fill="none" stroke="rgba(243,240,230,.5)" stroke-width=".5"/><rect x="86" y="18" width="13" height="28" fill="none" stroke="rgba(243,240,230,.5)" stroke-width=".5"/>
+        <rect x="0" y="27" width="1.5" height="10" fill="rgba(243,240,230,.7)"/><rect x="98.5" y="27" width="1.5" height="10" fill="rgba(243,240,230,.7)"/></svg>
+      <span class="mc-sigla esq">${esc(v.casa.sigla)} ataca →</span><span class="mc-sigla dir">← ${esc(v.fora.sigla)}</span>
+      <div class="bola-vivo" id="bola"></div>
     </div>
     <div class="grade2"><button class="btn" id="play">Começar</button>
       <select id="vel"><option value="1">Velocidade normal</option><option value="2">Rápida</option><option value="4">Muito rápida</option></select></div>
@@ -682,6 +757,12 @@ function desenharVivo(v) {
   document.getElementById("progresso").style.width = Math.min(100, v.progresso / 95 * 100) + "%";
   document.getElementById("numeros").textContent = `Posse ${v.posse}% · finalizações ${v.finalizacoes[0]} x ${v.finalizacoes[1]} · trocas ${v.trocas}/${v.max_trocas}` + (v.jogadores < 11 ? ` · com ${v.jogadores} em campo` : "");
   document.getElementById("trocas").textContent = `Trocas ${v.trocas}/${v.max_trocas}`;
+  const bola = document.getElementById("bola");
+  if (bola && v.bola) {
+    bola.style.left = (v.bola.x + (Math.random() * 6 - 3)) + "%";
+    bola.style.top = (v.bola.y + (Math.random() * 8 - 4)) + "%";
+    bola.classList.toggle("fora", !v.bola.casa);
+  }
   const lances = document.getElementById("lances");
   for (const ev of v.eventos) {
     if (ev.tipo === "INICIO" && lances.children.length) continue;
@@ -693,6 +774,7 @@ function desenharVivo(v) {
 }
 function continuarVivo() {
   if (VIVO.estado && VIVO.estado.fim) return terminarVivo();
+  if (VIVO.estado && VIVO.estado.progresso < 0.2) apito("Bola rolando", `${VIVO.estado.casa.nome} x ${VIVO.estado.fora.nome}`);
   VIVO.rodando = true;
   document.getElementById("play").textContent = "Pausar";
   tickVivo();
@@ -716,6 +798,16 @@ async function tickVivo() {
   const meuSigla = v.eu_casa ? v.casa.sigla : v.fora.sigla;
   const vermelhoMeu = v.eventos.some((e) => e.tipo === "CARTAO_VERMELHO" && e.sigla === meuSigla);
   if (gol) comemorarGol(gol.sigla === v.casa.sigla ? v.casa : v.fora);
+  else {
+    const verm = v.eventos.find((e) => e.tipo === "CARTAO_VERMELHO");
+    const amar = v.eventos.find((e) => e.tipo === "CARTAO_AMARELO");
+    const troca = v.eventos.find((e) => e.tipo === "SUBSTITUICAO");
+    if (verm) cartaoNaTela("vermelho", verm.texto);
+    else if (amar) cartaoNaTela("amarelo", amar.texto);
+    else if (troca) faixaNaTela("Substituição", troca.texto);
+  }
+  if (!anterior.fim && v.fim) apito("Fim de jogo", `${v.casa.sigla} ${v.casa.gols} x ${v.fora.gols} ${v.fora.sigla}`);
+  else if (v.intervalo) apito("Intervalo", `${v.casa.sigla} ${v.casa.gols} x ${v.fora.gols} ${v.fora.sigla}`);
   if (v.fim) { pausarVivo(); document.getElementById("play").textContent = "Ver relatório"; aviso("Fim de jogo"); return; }
   if (v.intervalo) { pausarVivo(); aviso("Intervalo: faça trocas sem gastar parada"); return; }
   if (vermelhoMeu) { pausarVivo(); aviso("Expulsão no seu time: ajuste a formação"); folhaTatica(true); return; }
@@ -1291,7 +1383,7 @@ async function telaPortal() {
       <div class="entre"><strong>${esc(o.nome)}</strong><span class="nivel ${corOvr(o.forca)}">${o.forca}</span></div>
       <div class="minus">${esc(o.pais)} · reputação ${o.reputacao} · o clube ${esc(o.motivo)} · vale até ${esc(o.validade)}</div>
       <button class="btn peq" data-emprego="${o.clube}" data-nome="${esc(o.nome)}" style="margin-top:8px">Aceitar</button></div>`).join("")}</div>` : ""}
-    ${col ? `<h3>Sala de imprensa</h3><div class="cartao destaque" id="coletiva"><p class="sub">Coletiva antes do jogo contra o ${esc(col.rival)} (${esc(col.comp)}${col.data ? ", " + esc(col.data) : ""}). Suas respostas mexem com o elenco, a torcida e a diretoria.</p>
+    ${col ? `<h3>Sala de imprensa</h3><div class="cartao destaque" id="coletiva"><p class="sub">Coletiva antes do jogo contra o ${esc(col.rival)} (${esc(col.comp)}${col.data ? ", " + esc(col.data) : ""}). Chance estimada de vitória: ${col.chance}%. Suas respostas mexem com o elenco, a torcida e a diretoria.</p>
       ${col.perguntas.map((q, i) => `<div style="margin-top:12px"><strong>${esc(q.texto)}</strong>${q.opcoes.map((o, k) => `<label class="linha" style="margin:6px 0;align-items:flex-start;gap:8px"><input type="radio" name="q${i}" value="${k}" style="width:auto;margin-top:3px" ${k === 1 ? "checked" : ""}><span>${esc(o.texto)}</span></label>`).join("")}</div>`).join("")}
       <button class="btn" id="responder" style="margin-top:10px">Responder</button></div>` : ""}
     <h3>Comunicações internas</h3>
@@ -1324,7 +1416,7 @@ async function telaPortal() {
   if (rb) rb.onclick = async () => {
     const respostas = col.perguntas.map((q, i) => +((app.querySelector(`input[name=q${i}]:checked`) || {}).value || 1));
     const r = await api("coletiva", { respostas });
-    folha(`<h2>Coletiva encerrada</h2><p class="sub">${esc(r.texto || r.erro)}</p><button class="btn" id="okc" style="margin-top:12px">Fechar</button>`).querySelector("#okc").onclick = () => { fecharFolha(); telaPortal(); };
+    folha(`<h2>Coletiva encerrada</h2>${(r.consequencias || [r.texto || r.erro]).map((t) => `<p class="sub" style="margin:8px 0">• ${esc(t)}</p>`).join("")}<button class="btn" id="okc" style="margin-top:12px">Fechar</button>`).querySelector("#okc").onclick = () => { fecharFolha(); telaPortal(); };
   };
 }
 
@@ -1406,7 +1498,8 @@ async function desenharGestao() {
     ${g.premios.length ? `<h3>Premiações recebidas</h3><div class="cartao lista">${g.premios.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(x.comp)}</strong><strong style="color:#9be8b4">${esc(x.valor)}</strong></div><div class="minus">${esc(x.colocacao)} · ${x.ano}</div></div>`).join("")}</div>` : ""}
     <h3>Extrato</h3>
     <div class="cartao lista" style="max-height:320px;overflow:auto">${g.extrato.map((x) => `<div class="item" style="display:block"><div class="entre"><span class="minus">${esc(x.data)}</span><strong style="color:${x.entrada ? "#9be8b4" : "#ff9d9d"}">${x.entrada ? "+ " : "menos "}${esc(x.valor)}</strong></div><div class="sub" style="font-size:13.5px">${esc(x.texto)}</div></div>`).join("") || `<div class="vazio">As movimentações aparecem a cada virada de mês, investimento, prêmio ou imprevisto.</div>`}</div>
-    <p class="minus">${esc(g.aviso)}</p>`;
+    <p class="minus">${esc(g.aviso)}</p>
+    <p class="minus" style="text-align:center;margin-top:10px">Versão do app: ${esc(VERSAO_APP)}</p>`;
   alvo.querySelectorAll("[data-inv]").forEach((b) => b.onclick = async () => { const r = await api("investir", { area: b.dataset.inv }); aviso(r.texto || r.erro); S.estado = await api("estado"); desenharGestao(); });
   alvo.querySelectorAll("[data-jovem]").forEach((b) => b.onclick = async () => { const r = await api("contratar_jovem", { indice: +b.dataset.jovem }); aviso(r.texto || r.erro); desenharGestao(); });
   const pb = alvo.querySelector("#peneira"); if (pb) pb.onclick = async () => { const r = await api("peneira"); aviso(r.texto || r.erro); desenharGestao(); };

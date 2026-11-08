@@ -165,7 +165,28 @@ a{color:var(--refletor)}
 .placar.flash{animation:flashplacar .9s ease}
 @keyframes flashplacar{0%{transform:scale(1)}30%{transform:scale(1.35);color:var(--refletor)}100%{transform:scale(1)}}
 .item.sel{outline:2px solid var(--refletor)}
-@media (prefers-reduced-motion:reduce){#app>*,.golzao,.golzao-centro,.golzao i,.evento.entra{animation:none!important}}
+.minicampo{position:relative;margin:10px 0;height:150px;border-radius:14px;overflow:hidden;
+  background:repeating-linear-gradient(90deg,#1f5c35 0 10%,#236a3c 10% 20%);border:1px solid var(--linha)}
+.minicampo svg{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px)}
+.mc-sigla{position:absolute;bottom:6px;font-size:11px;font-weight:800;background:rgba(0,0,0,.45);padding:1px 7px;border-radius:6px}
+.mc-sigla.esq{left:8px}.mc-sigla.dir{right:8px}
+.bola-vivo{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 3px rgba(255,209,102,.9),0 0 16px 4px rgba(255,209,102,.6);transition:left .55s cubic-bezier(.3,.7,.3,1),top .55s cubic-bezier(.3,.7,.3,1)}
+.bola-vivo.fora{box-shadow:0 0 0 3px rgba(126,226,160,.9),0 0 16px 4px rgba(126,226,160,.6)}
+.apito{position:fixed;inset:0;z-index:79;display:grid;place-items:center;pointer-events:none;background:rgba(0,0,0,.35);animation:apitofundo 1.7s ease forwards}
+.apito-caixa{text-align:center;animation:golpulo 1.7s cubic-bezier(.2,1.3,.4,1) forwards}
+.apito-ico{font-size:44px;color:var(--refletor)}.apito-t{font-family:var(--titulo);font-weight:900;font-size:44px;letter-spacing:.03em}
+.apito-s{font-weight:700;font-size:17px;margin-top:4px}
+@keyframes apitofundo{0%{opacity:0}15%{opacity:1}80%{opacity:1}100%{opacity:0}}
+.cartaotela{position:fixed;left:50%;top:38%;z-index:79;pointer-events:none;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:10px;width:88%}
+.cartaozinho{width:64px;height:90px;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.6);animation:cartaogira 1.6s ease forwards}
+.cartaozinho.vermelho{background:#e23b3b}.cartaozinho.amarelo{background:#ffd23f}
+.faixa-txt{background:rgba(0,0,0,.75);padding:6px 12px;border-radius:10px;font-weight:700;text-align:center;animation:apitofundo 1.6s ease forwards}
+@keyframes cartaogira{0%{transform:rotateY(90deg) scale(.5);opacity:0}25%{transform:rotateY(0) scale(1.1);opacity:1}80%{opacity:1}100%{transform:scale(1);opacity:0}}
+.faixatela{position:fixed;left:12px;right:12px;top:16px;z-index:79;pointer-events:none;background:rgba(5,14,9,.95);border:1px solid var(--refletor);
+  border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:2px;animation:faixadesce 1.8s ease forwards}
+.faixatela strong{color:var(--refletor)}
+@keyframes faixadesce{0%{transform:translateY(-120%)}15%{transform:none}85%{transform:none;opacity:1}100%{transform:translateY(-120%);opacity:0}}
 </style>
 </head>
 <body>

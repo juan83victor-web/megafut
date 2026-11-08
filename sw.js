@@ -1,5 +1,5 @@
 // Service worker do Megafut: guarda o jogo no aparelho para abrir sem internet.
-const VERSAO = "megafut-a65552c0beeb";
+const VERSAO = "megafut-e2b6e4656fe6";
 const ARQUIVOS = [
  "./",
  "./index.html",
@@ -20,7 +20,8 @@ const ARQUIVOS = [
 ];
 
 self.addEventListener("install", (evento) => {
-  evento.waitUntil(caches.open(VERSAO).then((cache) => cache.addAll(ARQUIVOS)).then(() => self.skipWaiting()));
+  // cache "reload": baixa direto do servidor, sem pegar cópia velha do navegador
+  evento.waitUntil(caches.open(VERSAO).then((cache) => cache.addAll(ARQUIVOS.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (evento) => {
