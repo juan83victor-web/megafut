@@ -1,5 +1,5 @@
 // Service worker do Megafut: guarda o jogo no aparelho para abrir sem internet.
-const VERSAO = "megafut-382bdb07b674";
+const VERSAO = "megafut-a65552c0beeb";
 const ARQUIVOS = [
  "./",
  "./index.html",

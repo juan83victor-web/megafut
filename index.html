@@ -149,6 +149,23 @@ a{color:var(--refletor)}
 .traco.info{border-color:var(--refletor);color:var(--refletor)}.traco.bom{border-color:rgba(103,217,138,.5);color:#9be8b4}.traco.ruim{border-color:rgba(255,107,107,.5);color:#ff9d9d}
 .attr{display:grid;grid-template-columns:1fr 40px;align-items:center;gap:8px;margin:5px 0}
 .attr .b{height:6px;border-radius:4px;background:rgba(243,240,230,.12);overflow:hidden}.attr .b i{display:block;height:100%;background:var(--refletor)}
+.golzao{position:fixed;inset:0;z-index:80;pointer-events:none;display:grid;place-items:center;overflow:hidden;animation:golfundo 1.9s ease forwards}
+.golzao-centro{text-align:center;animation:golpulo 1.9s cubic-bezier(.2,1.4,.4,1) forwards}
+.golzao-txt{font-family:var(--titulo);font-weight:900;font-size:min(34vw,170px);line-height:.9;color:var(--refletor);letter-spacing:.04em;text-shadow:0 6px 30px rgba(0,0,0,.55)}
+.golzao-clube{font-weight:800;font-size:20px;margin-top:6px;background:rgba(0,0,0,.55);display:inline-block;padding:4px 14px;border-radius:999px}
+.golzao i{position:absolute;top:-6%;width:9px;height:14px;border-radius:2px;animation:confete 1.8s ease-in forwards}
+@keyframes golfundo{0%{background:rgba(255,209,102,0)}12%{background:rgba(255,209,102,.28)}100%{background:rgba(255,209,102,0)}}
+@keyframes golpulo{0%{transform:scale(.2) rotate(-8deg);opacity:0}25%{transform:scale(1.12) rotate(2deg);opacity:1}45%{transform:scale(1)}85%{opacity:1}100%{transform:scale(1.05);opacity:0}}
+@keyframes confete{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(115vh) rotate(540deg)}}
+#app>*{animation:entrada .32s ease both}
+@keyframes entrada{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.evento.entra{animation:entrada .35s ease both}
+.mapa path.pais.on{animation:paison 1.6s ease-in-out infinite}
+@keyframes paison{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.placar.flash{animation:flashplacar .9s ease}
+@keyframes flashplacar{0%{transform:scale(1)}30%{transform:scale(1.35);color:var(--refletor)}100%{transform:scale(1)}}
+.item.sel{outline:2px solid var(--refletor)}
+@media (prefers-reduced-motion:reduce){#app>*,.golzao,.golzao-centro,.golzao i,.evento.entra{animation:none!important}}
 </style>
 </head>
 <body>

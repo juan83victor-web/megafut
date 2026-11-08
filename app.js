@@ -250,6 +250,7 @@ async function desenhar() {
     if (tela === "dados") return telaDados();
     if (tela === "painel") return telaPainel();
     if (tela === "partida") return telaPartida();
+    if (tela === "aovivo") return telaAoVivo();
     if (tela === "elenco") return telaElenco();
     if (tela === "jogos") return telaJogos();
     if (tela === "mercado") return telaMercado();
@@ -374,9 +375,37 @@ async function telaEscolha() {
         <span class="minus" style="display:block">${l.clubes.length} clubes · ${jog} com elenco real</span></span>${jog ? chip("Jogável", "ok") : chip("Em pesquisa", "")}</button>`;
     }).join("")}` : `<div class="vazio">Escolha um país no mapa.</div>`}</div>`;
   document.getElementById("volta").onclick = () => ir("inicio");
+  const svg = app.querySelector("svg.mapa");
+  const caixaDoPais = (nome) => {
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    svg.querySelectorAll(`path[data-pais="${CSS.escape(nome)}"]`).forEach((el) => { const b = el.getBBox(); x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y); x2 = Math.max(x2, b.x + b.width); y2 = Math.max(y2, b.y + b.height); });
+    if (!isFinite(x1)) return [0, 0, MAPA.w, MAPA.h];
+    const lado = Math.max(x2 - x1, (y2 - y1) * MAPA.w / MAPA.h, 26) * 1.8;
+    const alto = lado * MAPA.h / MAPA.w;
+    return [(x1 + x2) / 2 - lado / 2, (y1 + y2) / 2 - alto / 2, lado, alto];
+  };
+  const animarCaixa = (de, para, ms = 750) => new Promise((ok) => {
+    const t0 = performance.now();
+    const quadro = (t) => {
+      const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+      svg.setAttribute("viewBox", de.map((v, i) => v + (para[i] - v) * e).join(" "));
+      if (k < 1) requestAnimationFrame(quadro); else ok();
+    };
+    requestAnimationFrame(quadro);
+  });
+  const cheia = [0, 0, MAPA.w, MAPA.h];
+  if (pais) {
+    const alvo = caixaDoPais(pais);
+    if (S.zoomAnterior) { svg.setAttribute("viewBox", S.zoomAnterior.join(" ")); animarCaixa(S.zoomAnterior, alvo); }
+    else animarCaixa(cheia, alvo, 900);
+    S.zoomAnterior = alvo;
+    svg.insertAdjacentHTML("afterend", `<div style="text-align:center;margin-top:-4px"><button class="btn sec peq" id="americas">Ver as Américas</button></div>`);
+    document.getElementById("americas").onclick = async () => { await animarCaixa(alvo, cheia, 600); S.paisMapa = null; S.zoomAnterior = null; telaEscolha(); };
+  }
   app.querySelectorAll("[data-pais]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.pais === S.paisMapa) return;
     S.paisMapa = b.dataset.pais; S.ligaAberta = null; telaEscolha();
-    setTimeout(() => { const l = document.getElementById("ligas"); if (l) l.scrollIntoView({ behavior: "smooth" }); }, 60);
+    setTimeout(() => { const l = document.getElementById("ligas"); if (l) l.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 950);
   }));
   app.querySelectorAll("[data-l]").forEach((b) => b.onclick = () => { S.ligaAberta = +b.dataset.l; telaEscolha(); });
 }
@@ -459,7 +488,8 @@ function telaPainel() {
       <div style="text-align:right"><div class="num" style="font-size:22px">${esc(e.data)}</div><div class="minus">${dias[e.dia_semana]}</div></div></div>
     <h3>Próximo jogo</h3>
     ${cartaoJogo(e.proximo, true)}
-    <div class="grade2"><button class="btn" id="avancar">${e.proximo ? "Ir para o jogo" : "Avançar"}</button><button class="btn sec" id="dia">Avançar um dia</button></div>
+    <button class="btn" id="avancar" style="width:100%">${e.proximo ? "Ir para o jogo ao vivo" : "Avançar"}</button>
+    <div class="grade2" style="margin-top:8px"><button class="btn sec" id="simular">${e.proximo ? "Simular o jogo" : "Avançar rápido"}</button><button class="btn sec" id="dia">Avançar um dia</button></div>
     ${e.propostas ? `<button class="cartao destaque item" id="props" style="margin-top:12px"><div class="cresce"><strong>${e.propostas} proposta${e.propostas > 1 ? "s" : ""} esperando resposta</strong><div class="minus">Mercado, Propostas</div></div>${chip("Ver", "al")}</button>` : ""}
     ${(() => { const pt = e.portal || {}; const itens = [];
       if (pt.desempregado) itens.push("Você está sem clube: escolha uma proposta");
@@ -485,7 +515,8 @@ function telaPainel() {
     <h3>Central de notícias</h3>
     <div class="cartao lista">${e.noticias.length ? e.noticias.map(itemNoticia).join("") : `<div class="vazio">Sem notícias ainda.</div>`}</div>`;
   const $ = (id) => document.getElementById(id);
-  $("avancar").onclick = () => avancar("jogo");
+  $("avancar").onclick = () => avancar("jogo", true);
+  $("simular").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
   if ($("irportal")) $("irportal").onclick = () => ir("portal");
   if ($("props")) $("props").onclick = () => { S.abaMercado = "propostas"; ir("mercado"); };
@@ -501,11 +532,12 @@ function tabelaHtml(linhas, meu, curta = false) {
     ${linhas.map((l) => `<tr class="${l.clube.id === meu ? "eu" : ""}"><td>${l.pos}</td><td>${esc(l.clube.nome)}</td><td><strong>${l.p}</strong></td><td>${l.j}</td>
       ${curta ? "" : `<td>${l.v}</td><td>${l.e}</td><td>${l.d}</td>`}<td>${esc(sinal(l.sg))}</td>${curta ? "" : `<td style="letter-spacing:1px">${esc(l.ult)}</td>`}</tr>`).join("")}</table>`;
 }
-async function avancar(modo) {
+async function avancar(modo, aoVivo = false) {
   carregando(modo === "dia" ? "Um dia no mundo do futebol" : "Rodando o mundo até o seu jogo");
   try {
-    const r = await api("avancar", { modo });
+    const r = await api("avancar", { modo, ao_vivo: aoVivo });
     S.estado = r.estado;
+    if (r.ao_vivo) { ir("aovivo"); return; }
     if (r.partida) { S.partida = r.partida; S.fim = r.fim_de_temporada; ir("partida"); }
     else if (r.fim_de_temporada) { mostrarFimDeTemporada(r.fim_de_temporada); ir("painel"); }
     else { ir("painel"); if (r.noticias.length) aviso(r.noticias[r.noticias.length - 1]); }
@@ -563,6 +595,7 @@ function telaPartida() {
   }
   const eventos = r.eventos.filter((e) => e.nivel <= 1 || e.tipo === "GOL");
   let gc = 0, gf = 0, i = 0, acabou = false;
+  if (p.assistida) { setTimeout(() => terminar(), 0); }
   const total = 22000;
   const passo = () => {
     if (acabou) return;
@@ -573,6 +606,7 @@ function telaPartida() {
       if (ev.sigla === r.casa.sigla) gc++; else gf++;
       placar.textContent = `${gc} x ${gf}`;
       placar.classList.remove("flash"); void placar.offsetWidth; placar.classList.add("flash");
+      comemorarGol(ev.sigla === r.casa.sigla ? j.casa : j.fora, ev.texto);
     }
     const div = document.createElement("div");
     div.className = "evento" + (ev.tipo === "GOL" ? " gol" : "");
@@ -595,6 +629,141 @@ function telaPartida() {
   document.getElementById("pular").onclick = terminar;
   setTimeout(passo, 700);
 }
+// ---------------------------------------------------------------------------
+// Animações: gol e transição
+// ---------------------------------------------------------------------------
+function comemorarGol(clube, texto) {
+  const camada = document.createElement("div");
+  camada.className = "golzao";
+  const pedacos = Array.from({ length: 26 }, (_, k) => `<i style="left:${(k * 37) % 100}%;animation-delay:${(k % 7) * 0.06}s;background:${["#ffd166", "#7ee2a0", "#f3f0e6", "#ff8a8a"][k % 4]}"></i>`).join("");
+  camada.innerHTML = `<div class="golzao-centro"><div class="golzao-txt">GOL</div><div class="golzao-clube">${esc(clube.nome || clube)}</div></div>${pedacos}`;
+  document.body.appendChild(camada);
+  if (navigator.vibrate) { try { navigator.vibrate([60, 40, 120]); } catch (e) { } }
+  setTimeout(() => camada.remove(), 1900);
+}
+
+// ---------------------------------------------------------------------------
+// Jogo ao vivo
+// ---------------------------------------------------------------------------
+const VIVO = { rodando: false, velocidade: 1, timer: null, estado: null, espera: false };
+async function telaAoVivo() {
+  carregando("Os times entram em campo");
+  let v;
+  try { v = await api("vivo_iniciar"); } catch (e) { aviso(e.message); ir("painel"); return; }
+  VIVO.estado = v; VIVO.rodando = false; VIVO.velocidade = 1;
+  app.innerHTML = `
+    <div class="cartao destaque vivo-topo" style="text-align:center">
+      <p class="minus">${esc(v.competicao)} · ao vivo</p>
+      <div class="entre" style="margin-top:10px">
+        <div style="flex:1">${escudo(v.casa.sigla, "g")}<p style="margin-top:6px;font-weight:600">${esc(v.casa.nome)}</p></div>
+        <div><div class="placar" id="placar">0 x 0</div><div class="relogio" id="relogio">0'</div></div>
+        <div style="flex:1">${escudo(v.fora.sigla, "g")}<p style="margin-top:6px;font-weight:600">${esc(v.fora.nome)}</p></div>
+      </div>
+      <div class="barra" style="margin-top:10px"><i id="progresso" style="width:0%"></i></div>
+      <p class="minus" id="numeros" style="margin-top:6px"></p>
+    </div>
+    <div class="grade2"><button class="btn" id="play">Começar</button>
+      <select id="vel"><option value="1">Velocidade normal</option><option value="2">Rápida</option><option value="4">Muito rápida</option></select></div>
+    <div class="grade2" style="margin-top:8px"><button class="btn sec" id="trocas">Trocas</button><button class="btn sec" id="taticas">Formação e estilo</button></div>
+    <button class="btn sec" id="final" style="width:100%;margin-top:8px">Simular até o fim</button>
+    <div id="lances" class="cartao" style="margin-top:12px"></div>`;
+  document.getElementById("play").onclick = () => VIVO.estado && VIVO.estado.fim ? terminarVivo() : (VIVO.rodando ? pausarVivo() : continuarVivo());
+  document.getElementById("vel").onchange = (ev) => { VIVO.velocidade = +ev.target.value; };
+  document.getElementById("trocas").onclick = () => { pausarVivo(); folhaTrocas(); };
+  document.getElementById("taticas").onclick = () => { pausarVivo(); folhaTatica(); };
+  document.getElementById("final").onclick = () => terminarVivo();
+  desenharVivo(v);
+}
+function desenharVivo(v) {
+  const placar = document.getElementById("placar");
+  if (!placar) return;
+  placar.textContent = `${v.casa.gols} x ${v.fora.gols}`;
+  document.getElementById("relogio").textContent = v.minuto;
+  document.getElementById("progresso").style.width = Math.min(100, v.progresso / 95 * 100) + "%";
+  document.getElementById("numeros").textContent = `Posse ${v.posse}% · finalizações ${v.finalizacoes[0]} x ${v.finalizacoes[1]} · trocas ${v.trocas}/${v.max_trocas}` + (v.jogadores < 11 ? ` · com ${v.jogadores} em campo` : "");
+  document.getElementById("trocas").textContent = `Trocas ${v.trocas}/${v.max_trocas}`;
+  const lances = document.getElementById("lances");
+  for (const ev of v.eventos) {
+    if (ev.tipo === "INICIO" && lances.children.length) continue;
+    const div = document.createElement("div");
+    div.className = "evento" + (ev.tipo === "GOL" ? " gol" : "") + " entra";
+    div.innerHTML = `<span class="m">${esc(ev.m)}</span><span>${esc(ev.texto)}</span>`;
+    lances.prepend(div);
+  }
+}
+function continuarVivo() {
+  if (VIVO.estado && VIVO.estado.fim) return terminarVivo();
+  VIVO.rodando = true;
+  document.getElementById("play").textContent = "Pausar";
+  tickVivo();
+}
+function pausarVivo() {
+  VIVO.rodando = false;
+  clearTimeout(VIVO.timer);
+  const b = document.getElementById("play"); if (b) b.textContent = "Continuar";
+}
+async function tickVivo() {
+  if (!VIVO.rodando || VIVO.espera || telaAtual() !== "aovivo") return;
+  VIVO.espera = true;
+  let v;
+  try { v = await api("vivo_rodar", { ate: VIVO.estado.progresso + VIVO.velocidade }); }
+  catch (e) { VIVO.espera = false; aviso(e.message); return pausarVivo(); }
+  VIVO.espera = false;
+  const anterior = VIVO.estado;
+  VIVO.estado = v;
+  desenharVivo(v);
+  const gol = v.eventos.find((e) => e.tipo === "GOL");
+  const meuSigla = v.eu_casa ? v.casa.sigla : v.fora.sigla;
+  const vermelhoMeu = v.eventos.some((e) => e.tipo === "CARTAO_VERMELHO" && e.sigla === meuSigla);
+  if (gol) comemorarGol(gol.sigla === v.casa.sigla ? v.casa : v.fora);
+  if (v.fim) { pausarVivo(); document.getElementById("play").textContent = "Ver relatório"; aviso("Fim de jogo"); return; }
+  if (v.intervalo) { pausarVivo(); aviso("Intervalo: faça trocas sem gastar parada"); return; }
+  if (vermelhoMeu) { pausarVivo(); aviso("Expulsão no seu time: ajuste a formação"); folhaTatica(true); return; }
+  VIVO.timer = setTimeout(tickVivo, gol ? 1800 : 520);
+}
+function folhaTrocas() {
+  const v = VIVO.estado;
+  let sai = null;
+  const f = folha(`<h2>Trocas ${v.trocas}/${v.max_trocas}</h2>
+    <p class="sub">${v.pode_trocar ? `Até ${v.max_trocas} trocas em no máximo ${v.max_janelas} paradas, sem contar o intervalo. Paradas usadas: ${v.janelas}.` : "Sem trocas disponíveis agora."}</p>
+    <h3>Quem sai</h3><div class="cartao lista">${v.em_campo.map((j) => `<button class="item" data-sai="${j.id}"><span class="pos">${esc(j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
+      <div class="minus">fôlego ${j.condicao}% · nota ${String(j.nota).replace(".", ",")}${j.amarelo ? " · amarelado" : ""}${j.gols ? " · " + j.gols + " gol" + (j.gols > 1 ? "s" : "") : ""}</div></div>${j.ovr ? `<span class="nivel ${corOvr(j.ovr)}">${j.ovr}</span>` : ""}</button>`).join("")}</div>
+    <h3>Quem entra</h3><div class="cartao lista">${v.banco.map((j) => `<button class="item" data-entra="${j.id}"><span class="pos">${esc(j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div><div class="minus">fôlego ${j.condicao}%</div></div>${j.ovr ? `<span class="nivel ${corOvr(j.ovr)}">${j.ovr}</span>` : ""}</button>`).join("") || `<div class="vazio">Banco vazio.</div>`}</div>
+    <button class="btn sec" id="voltarjogo" style="margin-top:12px;width:100%">Voltar ao jogo</button>`);
+  f.querySelector("#voltarjogo").onclick = () => { fecharFolha(); };
+  f.querySelectorAll("[data-sai]").forEach((b) => b.onclick = () => {
+    sai = +b.dataset.sai;
+    f.querySelectorAll("[data-sai]").forEach((x) => x.classList.toggle("sel", x === b));
+  });
+  f.querySelectorAll("[data-entra]").forEach((b) => b.onclick = async () => {
+    if (!sai) { aviso("Escolha primeiro quem sai"); return; }
+    try { const nv = await api("vivo_trocar", { sai, entra: +b.dataset.entra }); VIVO.estado = nv; desenharVivo(nv); folhaTrocas(); aviso("Troca feita"); }
+    catch (e) { aviso(e.message); }
+  });
+}
+function folhaTatica(expulsao = false) {
+  const v = VIVO.estado;
+  const f = folha(`<h2>${expulsao ? "Expulsão: reorganize o time" : "Formação e estilo"}</h2>
+    <p class="sub">Formação atual: ${esc(v.formacao)} com ${v.jogadores} em campo.${v.jogadores < 11 ? " Com menos jogadores, a formação perde vagas no ataque primeiro." : ""}</p>
+    <h3>Formação</h3><div class="grade2">${v.formacoes.map((c) => `<button class="btn ${c === v.formacao ? "" : "sec"}" data-form="${c}">${c.split("").join(" ")}</button>`).join("")}</div>
+    <h3>Estilo</h3><div class="grade2">${[["posse", "Posse e pressão"], ["equilibrada", "Equilibrado"], ["contragolpe", "Contragolpe"], ["bloco_baixo", "Fechar o time"]].map(([k, n]) => `<button class="btn sec" data-est="${k}">${n}</button>`).join("")}</div>
+    <button class="btn sec" id="voltarjogo" style="margin-top:12px;width:100%">Voltar ao jogo</button>`);
+  f.querySelector("#voltarjogo").onclick = () => fecharFolha();
+  f.querySelectorAll("[data-form]").forEach((b) => b.onclick = async () => { const nv = await api("vivo_formacao", { codigo: b.dataset.form }); VIVO.estado = nv; desenharVivo(nv); aviso("Formação: " + b.dataset.form); folhaTatica(); });
+  f.querySelectorAll("[data-est]").forEach((b) => b.onclick = async () => { const nv = await api("vivo_estilo", { preset: b.dataset.est }); VIVO.estado = nv; desenharVivo(nv); aviso("Estilo trocado"); fecharFolha(); });
+}
+async function terminarVivo() {
+  pausarVivo();
+  carregando("Apito final");
+  try {
+    const r = await api("vivo_finalizar");
+    S.estado = r.estado;
+    if (r.partida) { r.partida.assistida = true; S.partida = r.partida; S.fim = r.fim_de_temporada; ir("partida"); }
+    else ir("painel");
+    salvarAgora(true);
+  } catch (e) { aviso(e.message); ir("painel"); }
+}
+
 function centralDaPartida(p) {
   if (!(p.central || []).length) return;
   document.getElementById("depois").insertAdjacentHTML("afterbegin", `<h3>Central de notícias</h3><div class="cartao destaque lista">${p.central.map((n) => itemNoticia({ texto: n.texto, tipo: n.tipo, data: "" })).join("")}</div>`);
