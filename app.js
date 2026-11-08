@@ -90,6 +90,8 @@ const GRUPOS_PLANTEL = [["GOL", "Goleiros"], ["ZAG", "Zagueiros"], ["LD", "Later
   ["LAT", "Laterais (lado a confirmar)"], ["DEF", "Defensores (zagueiro ou lateral a confirmar)"], ["VOL", "Volantes"],
   ["MEI", "Meias"], ["PD", "Pontas direitos"], ["PE", "Pontas esquerdos"], ["PON", "Pontas (lado a confirmar)"], ["ATA", "Atacantes"]];
 // Nome e sobrenome: primeiro e último nome quando a fonte traz mais de dois; apelido fica como está
+function corOvr(n) { return n >= 75 ? "o1" : n >= 65 ? "o2" : n >= 52 ? "o3" : "o4"; }
+function textoIdade(j) { return j.idade_ok ? j.idade + " anos" : "~" + j.idade + " anos (estimada)"; }
 function nomeSobrenome(nome) {
   const p = String(nome || "").replace(/\s*\(.*?\)\s*/g, " ").trim().split(/\s+/).filter(Boolean);
   if (p.length <= 2) return p.join(" ");
@@ -211,7 +213,7 @@ async function salvarAgora(forcar = false) {
 // Estado da tela e navegação
 // ---------------------------------------------------------------------------
 const S = { inicio: null, estado: null, paises: null, pais: 0, partida: null, compAberta: null, abaMercado: "buscar",
-  filtros: { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, valor_min: 0, valor_max: 0, nivel_min: 0, livres: false, texto: "" }, opcoesMercado: null, saveExistente: null };
+  filtros: { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, faixa: "", nivel_min: 0, situacao: "", ordem: "ovr", na_verba: false, texto: "" }, opcoesMercado: null, saveExistente: null };
 const TELAS_COM_MENU = ["painel", "elenco", "jogos", "mercado", "clube"];
 function ir(nome) { if (location.hash !== "#" + nome) location.hash = nome; else desenhar(); }
 window.addEventListener("hashchange", () => desenhar());
@@ -469,13 +471,18 @@ function telaPainel() {
       <div class="entre"><span class="sub">Janela</span><strong>${e.janela.aberta ? "Aberta até " + esc(e.janela.fim) : "Fechada" + (e.janela.proxima ? ", abre " + esc(e.janela.proxima) : "")}</strong></div>
       <p class="minus" style="margin-top:6px">Valores estimados pelo Megafut.</p></div>
     ${e.ultimos.length ? `<h3>Últimos jogos</h3>${e.ultimos.map((j) => cartaoJogo(j)).join("")}` : ""}
-    <h3>Notícias</h3>
-    <div class="cartao lista">${e.noticias.length ? e.noticias.map((n) => `<div class="item" style="display:block"><div class="minus">${esc(n.data)}</div><div>${esc(n.texto)}</div></div>`).join("") : `<div class="vazio">Sem notícias ainda.</div>`}</div>`;
+    <h3>Central de notícias</h3>
+    <div class="cartao lista">${e.noticias.length ? e.noticias.map(itemNoticia).join("") : `<div class="vazio">Sem notícias ainda.</div>`}</div>`;
   const $ = (id) => document.getElementById(id);
   $("avancar").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
   if ($("props")) $("props").onclick = () => { S.abaMercado = "propostas"; ir("mercado"); };
   if ($("tab")) $("tab").onclick = () => { S.compAberta = e.liga_id; ir("jogos"); };
+}
+const TIPO_NOTICIA = { lesao: ["DM", "ruim"], financas: ["Finanças", "al"], titulo: ["Título", "ok"], base: ["Base", "ok"], mercado: ["Mercado", ""], competicao: ["Competição", ""] };
+function itemNoticia(n) {
+  const t = TIPO_NOTICIA[n.tipo];
+  return `<div class="item" style="display:block"><div class="minus">${esc(n.data)}${t ? " " + chip(t[0], t[1]) : ""}</div><div>${esc(n.texto)}</div></div>`;
 }
 function tabelaHtml(linhas, meu, curta = false) {
   return `<table class="tabela"><tr><th>#</th><th>Clube</th><th>P</th><th>J</th>${curta ? "" : "<th>V</th><th>E</th><th>D</th>"}<th>SG</th>${curta ? "" : "<th>Últ.</th>"}</tr>
@@ -538,6 +545,7 @@ function telaPartida() {
     placar.textContent = `${j.gc} x ${j.gf}`;
     relogio.textContent = "Fim";
     lances.innerHTML = `<p class="sub">${esc((p.noticias || []).slice(-1)[0] || "Placar pela simulação rápida.")}</p>`;
+    centralDaPartida(p);
     document.getElementById("pular").remove();
     return;
   }
@@ -570,9 +578,14 @@ function telaPartida() {
     lances.innerHTML = eventos.slice().reverse().map((ev) => `<div class="evento${ev.tipo === "GOL" ? " gol" : ""}"><span class="m">${esc(ev.m)}</span><span>${esc(ev.texto)}</span></div>`).join("");
     const b = document.getElementById("pular"); if (b) b.remove();
     relatorioPartida(r);
+    centralDaPartida(p);
   };
   document.getElementById("pular").onclick = terminar;
   setTimeout(passo, 700);
+}
+function centralDaPartida(p) {
+  if (!(p.central || []).length) return;
+  document.getElementById("depois").insertAdjacentHTML("afterbegin", `<h3>Central de notícias</h3><div class="cartao destaque lista">${p.central.map((n) => itemNoticia({ texto: n.texto, tipo: n.tipo, data: "" })).join("")}</div>`);
 }
 function relatorioPartida(r) {
   const c = r.casa, f = r.fora;
@@ -613,7 +626,7 @@ async function telaElenco() {
     ${abasElenco()}
     <p class="minus">${fonte(el.fonte, "Elenco")} ${el.data_fonte ? "· " + esc(el.data_fonte) : ""}</p>
     ${GRUPOS_PLANTEL.filter(([p]) => grupos[p]).map(([p, titulo]) => `<h3>${titulo} (${grupos[p].length})</h3><div class="cartao lista">${grupos[p].sort((a, b) => ovr(b) - ovr(a)).map((j) => linhaJogador(j)).join("")}</div>`).join("")}
-    <p class="minus">OVR: overall de 0 a 100, estimado pelo Megafut a partir do nível do clube e da fonte (CONFIRMAR). LE e LD só quando a fonte diz o lado.</p>
+    <p class="minus">OVR de 0 a 100. Atletas que estão no EA SPORTS FC 26 usam a nota do jogo como referência; os outros são estimados pela hierarquia do elenco (camisa, base, capitão, estrangeiro). LE e LD só quando a fonte diz o lado.</p>
     ${el.emprestados.length ? `<h3>Emprestados a outros clubes</h3><div class="cartao lista">${el.emprestados.map((j) => `<div class="item"><span class="pos">${esc(j.pos)}</span><div class="cresce"><div class="nome">${esc(j.nome)}</div><div class="minus">${esc(j.clube || "Clube fora do jogo")}</div></div></div>`).join("")}</div>` : ""}
     <p class="minus" style="margin-top:10px">${esc(el.aviso)}</p>`;
   ligarAbasElenco();
@@ -645,11 +658,12 @@ function desenharCampo() {
     const jid = E.vagas[i], x = porId[jid];
     const foraPos = x && ((x.pos !== v.pos && !(x.sec || []).includes(v.pos)) || (x.lado && v.pos === "LAT" && v.sigla !== v.pos && ("L" + x.lado) !== v.sigla));
     const cls = ["ficha", !x ? "vazia" : "", x && !x.disponivel ? "indisp" : "", foraPos ? "fora" : "", ehSel("vaga", i) ? "sel" : ""].join(" ");
-    return `<button class="${cls}" data-vaga="${i}" style="left:${v.x}%;top:${v.y}%"><span class="bola">${x ? esc(x.num ?? x.pos) : "+"}</span>
-      <span class="rot">${x ? esc(nomeSobrenome(x.nome)) : "Vazio"}</span><span class="vpos">${esc(v.sigla || v.pos)}${x ? " · " + ovr(x) : ""}</span></button>`;
+    return `<button class="${cls}" data-vaga="${i}" style="left:${v.x}%;top:${v.y}%"><span class="bola ${x ? corOvr(ovr(x)) : ""}">${x ? ovr(x) : "+"}</span>
+      <span class="rot">${x ? esc(nomeSobrenome(x.nome)) : "Vazio"}</span><span class="vpos">${esc(v.sigla || v.pos)}${x && x.num ? " · " + x.num : ""}${x && x.lesao ? " · DM" : ""}</span></button>`;
   };
   const reserva = (x, tipo) => `<button class="reserva ${ehSel(tipo, x.id) ? "sel" : ""}" data-${tipo}="${x.id}"><span class="pos">${esc(x.rotulo || x.pos)}</span>
-    <span class="n">${esc(nomeSobrenome(x.nome))}</span><span class="nivel" style="margin-left:auto">${ovr(x)}</span>${!x.disponivel ? `<span class="chip ruim">${x.lesao ? "DM" : "Susp."}</span>` : ""}</button>`;
+    <span class="n">${esc(x.nome)}<span class="d">${x.num ? "camisa " + x.num + " · " : ""}condição ${x.condicao}% · moral ${x.moral}${!x.disponivel ? (x.lesao ? ` · <b style="color:#ff8a8a">DM ${x.lesao} dias</b>` : ` · <b style="color:#ff8a8a">suspenso</b>`) : ""}</span></span>
+    <span class="nivel ${corOvr(ovr(x))}">${ovr(x)}</span></button>`;
   app.innerHTML = `
     <div class="entre"><h2>Elenco</h2><span class="minus">${d.jogadores.length} atletas</span></div>
     ${abasElenco()}
@@ -730,14 +744,15 @@ function desenharCampo() {
 }
 function linhaJogador(j) {
   const sinais = [];
-  if (j.lesao) sinais.push(chip(`Lesão ${j.lesao}d`, "ruim"));
+  if (j.lesao && !j.lesao_info) sinais.push(chip(`Lesão ${j.lesao}d`, "ruim"));
   if (j.susp) sinais.push(chip("Suspenso", "ruim"));
   if (j.listado) sinais.push(chip(j.listado === "venda" ? "À venda" : "Para empréstimo", "al"));
   if (j.emprestado_por) sinais.push(chip("Emprestado", ""));
   if (j.onze) sinais.push(chip("Titular", "ok"));
-  return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome">${esc(j.nome)}</div>
-    <div class="minus">${j.idade_ok ? j.idade + " anos" : "idade CONFIRMAR"} · moral ${j.moral} · ${plural(j.jogos, "jogo", "jogos")}${j.gols ? ", " + plural(j.gols, "gol", "gols") : ""}</div>
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span class="nivel">${ovr(j)}</span></button>`;
+  const dm = j.lesao_info ? `<div class="dm">DM: ${esc(j.lesao_info.diagnostico)} · volta ${esc(j.lesao_info.volta)} · ${j.lesao_info.jogos ? "perde " + plural(j.lesao_info.jogos, "jogo", "jogos") : "sem jogos no período"}</div>` : "";
+  return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
+    <div class="minus">${textoIdade(j)} · moral ${j.moral} · ${plural(j.jogos, "jogo", "jogos")}${j.gols ? ", " + plural(j.gols, "gol", "gols") : ""}</div>${dm}
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span class="nivel ${corOvr(ovr(j))}">${ovr(j)}</span></button>`;
 }
 async function abrirJogador(id, meu) {
   const f = folha(`<div class="vazio"><div class="anel"></div></div>`);
@@ -748,11 +763,16 @@ async function abrirJogador(id, meu) {
       <div style="text-align:right"><span class="num" style="font-size:40px">${ovr(j)}</span><div class="minus">OVR</div></div></div>
     <div class="cartao">
       <div class="entre"><span class="sub">Clube</span><strong>${esc(j.clube ? j.clube.nome : "Sem clube")}</strong></div>
-      <div class="entre"><span class="sub">Idade</span><strong>${j.idade_ok ? j.idade + " anos" : j.idade + " (estimada, CONFIRMAR)"}</strong></div>
+      <div class="entre"><span class="sub">Idade</span><strong>${j.idade_ok ? j.idade + " anos" : "~" + j.idade + " (estimada, CONFIRMAR)"}</strong></div>
+      ${j.pe && j.pe !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Pé</span><strong>${esc(j.pe)}</strong></div>` : ""}
+      ${j.altura && j.altura !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Altura e peso</span><strong>${esc(j.altura)} cm${j.peso && j.peso !== "CONFIRMAR" ? " · " + esc(j.peso) + " kg" : ""}</strong></div>` : ""}
       <div class="entre"><span class="sub">Nacionalidade</span><strong>${esc(j.nac)}</strong></div>
       <div class="entre"><span class="sub">Contrato até</span><strong>${esc(j.fim)}</strong></div>
       <div class="entre"><span class="sub">Salário</span><strong>${esc(j.salario)}</strong></div>
       <div class="entre"><span class="sub">Valor de mercado</span><strong>${esc(j.valor)}</strong></div>
+      ${j.lista_clube === "venda" ? `<div class="entre"><span class="sub">Na lista de transferência</span><strong style="color:#9be8b4">pede cerca de ${esc(j.preco)}</strong></div>` : ""}
+      ${j.lista_clube === "emprestimo" ? `<div class="entre"><span class="sub">Na lista de empréstimo</span><strong style="color:#ffd166">sem taxa, você paga o salário</strong></div>` : ""}
+      ${j.lesao_info ? `<div class="dm" style="margin:6px 0">Departamento médico: ${esc(j.lesao_info.diagnostico)}${j.lesao_info.gravidade ? " (" + esc(j.lesao_info.gravidade) + ")" : ""}. Volta por volta de ${esc(j.lesao_info.volta)}, ${j.lesao_info.jogos ? "perde " + plural(j.lesao_info.jogos, "jogo", "jogos") : "sem jogos no período"}.</div>` : ""}
       <div class="entre"><span class="sub">Multa rescisória</span><strong>${esc(j.multa)}</strong></div>
       <div class="entre"><span class="sub">Temporada</span><strong>${plural(j.jogos, "jogo", "jogos")}, ${plural(j.gols, "gol", "gols")}, ${j.ass} assist.</strong></div>
       ${j.emprestado_por ? `<div class="entre"><span class="sub">Emprestado por</span><strong>${esc(j.emprestado_por)}</strong></div>` : ""}
@@ -760,8 +780,15 @@ async function abrirJogador(id, meu) {
       ${j.obs ? `<p class="minus">${esc(j.obs)}</p>` : ""}${j.fonte ? `<p class="minus">${fonte(j.fonte)}</p>` : ""}
     </div>
     ${(j.titulos || []).length ? `<h3>Títulos</h3><p class="sub">${esc(j.titulos.join(" · "))}</p>` : ""}
+    ${(j.caracteristicas || []).length ? `<h3>Características principais</h3><div>${j.caracteristicas.map((c) => `<span class="traco ${c.tom}">${esc(c.texto)}</span>`).join("")}</div>
+      <p class="minus" style="margin-top:6px">${j.ref && (j.ref.estilos || []).length ? "Estilos de jogo do EA SPORTS FC 26. " : "Perfil de jogo estimado pelo Megafut. "}${j.real ? "Em atletas reais o jogo não atribui pontos fracos de comportamento ou saúde." : "Atleta gerado pelo jogo."}</p>` : ""}
+    ${(j.resumo || []).length ? `<h3>Resumo (1 a 20)</h3><div class="cartao">${j.resumo.map(([k, v]) => `<div class="attr"><div><div class="minus">${esc(k)}</div><div class="b"><i style="width:${v * 5}%"></i></div></div><strong style="text-align:right">${v}</strong></div>`).join("")}</div>` : ""}
+    ${j.ref ? `<h3>Referência EA SPORTS FC 26</h3><div class="cartao"><div class="entre"><span class="sub">Nota no FC 26${j.ref.time ? " (" + esc(j.ref.time) + ")" : ""}</span><strong>${j.ref.ovr}</strong></div>
+      ${Object.keys(j.ref.atributos || {}).length ? `<p class="sub" style="margin-top:6px">${Object.entries(j.ref.atributos).map(([k, v]) => esc(k) + " " + v).join(" · ")}</p>` : ""}
+      ${(j.ref.estilos || []).length ? `<div style="margin-top:6px">${j.ref.estilos.map((e) => `<span class="traco bom">${esc(e)}</span>`).join("")}</div>` : ""}
+      <p class="minus" style="margin-top:6px">${esc(j.ref.fonte)}. O OVR do Megafut é a nota EA menos 8, para ficar na mesma escala dos clubes brasileiros, que não estão no FC 26.</p></div>` : ""}
     <div id="acoes" style="display:grid;gap:8px;margin-top:12px"></div>
-    ${attrs}`;
+    ${attrs ? `<details style="margin-top:10px"><summary class="sub">Todos os atributos</summary>${attrs}</details>` : ""}`;
   const acoes = f.querySelector("#acoes");
   if (meu) {
     const listado = j.listado;
@@ -832,7 +859,8 @@ async function desenharCompeticao(corpo, id, fase = null, rodada = null) {
   corpo.innerHTML = `
     <div class="cartao"><strong>${esc(t.nome)}</strong>${t.campeao ? ` <span class="chip al">Campeão: ${esc(t.campeao.nome)}</span>` : ""}
       <div class="abas">${t.fases.map((x) => `<button class="aba ${x.indice === t.indice ? "on" : ""}" data-f="${x.indice}" ${x.estado === "aguardando" ? "disabled" : ""}>${esc(x.nome)}</button>`).join("")}</div>
-      ${t.explicacao ? `<p class="minus" style="margin-top:8px">${esc(t.explicacao)}</p>` : ""}</div>
+      ${t.explicacao ? `<p class="minus" style="margin-top:8px">${esc(t.explicacao)}</p>` : ""}
+      ${t.premio ? `<p class="minus" style="margin-top:6px">${esc(t.premio.texto)}${t.premio.fonte ? " · " + fonte(t.premio.fonte) : ""}</p>` : ""}</div>
     ${t.grupos.map((g, i) => `<div class="cartao">${t.grupos.length > 1 ? `<p class="minus">Grupo ${i + 1}</p>` : ""}${tabelaHtml(g, t.usuario)}</div>`).join("")}
     ${t.confrontos.map((c) => `<div class="cartao"><div class="entre"><strong>${esc(c.a.nome)}</strong><span class="minus">x</span><strong>${esc(c.b ? c.b.nome : "Folga")}</strong></div>
       ${c.jogos.map((j) => `<p class="minus">${esc(j.data)}: ${esc(j.casa.sigla)} ${j.gc ?? ""} x ${j.gf ?? ""} ${esc(j.fora.sigla)}${j.pc !== null && j.pc !== undefined ? ` (pên. ${j.pc} x ${j.pf})` : ""}</p>`).join("")}
@@ -873,28 +901,42 @@ async function telaMercado() {
     <div class="campo"><label>Nacionalidade</label><select id="nac"><option value="">Todas</option>${op.nacionalidades.map((n) => `<option ${fl.nacionalidade === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div></div>
     <div class="grade2"><div class="campo"><label>Idade mínima</label><input id="idmin" type="number" inputmode="numeric" value="${fl.idade_min}"></div>
     <div class="campo"><label>Idade máxima</label><input id="idade" type="number" inputmode="numeric" value="${fl.idade_max}"></div></div>
-    <div class="grade2"><div class="campo"><label>Preço mínimo (R$ mi)</label><input id="vmin" type="number" inputmode="decimal" step="0.5" value="${fl.valor_min / 1e6 || ""}"></div>
-    <div class="campo"><label>Preço máximo (R$ mi)</label><input id="vmax" type="number" inputmode="decimal" step="0.5" value="${fl.valor_max / 1e6 || ""}"></div></div>
-    <div class="campo"><label>OVR mínimo (0 a 100)</label><input id="nivel" type="number" inputmode="numeric" step="1" value="${Math.round(fl.nivel_min * 5)}"></div>
-    <label class="linha" style="margin:6px 0"><input id="livres" type="checkbox" style="width:auto" ${fl.livres ? "checked" : ""}> Só jogadores sem clube</label>
+    <div class="grade2"><div class="campo"><label>Preço</label><select id="faixa">${FAIXAS.map(([k, n]) => `<option value="${k}" ${fl.faixa === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+    <div class="campo"><label>OVR mínimo</label><input id="nivel" type="number" inputmode="numeric" step="1" value="${Math.round(fl.nivel_min * 5) || ""}" placeholder="0 a 100"></div></div>
+    <div class="grade2"><div class="campo"><label>Situação</label><select id="situacao">${SITUACOES.map(([k, n]) => `<option value="${k}" ${fl.situacao === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+    <div class="campo"><label>Ordenar por</label><select id="ordem">${[["ovr", "Maior OVR"], ["barato", "Mais barato"], ["jovem", "Mais jovem"]].map(([k, n]) => `<option value="${k}" ${fl.ordem === k ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
+    <label class="linha" style="margin:6px 0"><input id="naverba" type="checkbox" style="width:auto" ${fl.na_verba ? "checked" : ""}> Só quem cabe na minha verba</label>
     <div class="grade2"><button class="btn" id="buscar">Buscar</button><button class="btn sec" id="limpar">Limpar filtros</button></div>
-    <p class="minus" style="margin-top:6px">Preço é o valor de mercado estimado pelo Megafut. Idade sem fonte aparece como estimada.</p></div><div id="res"></div>`;
+    <p class="minus" style="margin-top:6px">Lista de transferência: o clube quer vender e aceita menos que o valor de mercado. Lista de empréstimo: sai sem taxa, você paga só o salário.</p></div><div id="res"></div>`;
   document.getElementById("buscar").onclick = buscarMercado;
-  document.getElementById("limpar").onclick = () => { S.filtros = { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, valor_min: 0, valor_max: 0, nivel_min: 0, livres: false, texto: "" }; telaMercado(); };
+  document.getElementById("limpar").onclick = () => { S.filtros = { posicao: "", pais: "", liga: "", nacionalidade: "", idade_min: 15, idade_max: 40, faixa: "", nivel_min: 0, situacao: "", ordem: "ovr", na_verba: false, texto: "" }; telaMercado(); };
   buscarMercado();
 }
+const FAIXAS = [["", "Qualquer preço", 0, 0], ["a50", "Até R$ 50 mil", 0, 50e3], ["a200", "R$ 50 mil a 200 mil", 50e3, 200e3],
+  ["a500", "R$ 200 mil a 500 mil", 200e3, 500e3], ["a1m", "R$ 500 mil a 1 mi", 500e3, 1e6], ["a3m", "R$ 1 a 3 mi", 1e6, 3e6],
+  ["a10m", "R$ 3 a 10 mi", 3e6, 10e6], ["a30m", "R$ 10 a 30 mi", 10e6, 30e6], ["m30", "Acima de R$ 30 mi", 30e6, 0]];
+const SITUACOES = [["", "Todos"], ["venda", "Lista de transferência"], ["emprestimo", "Lista de empréstimo"], ["livres", "Sem clube"]];
 async function buscarMercado() {
   const v = (id) => document.getElementById(id);
   const fl = S.filtros;
   fl.posicao = v("pos").value; fl.idade_max = +v("idade").value || 40; fl.idade_min = +v("idmin").value || 0; fl.nivel_min = (+v("nivel").value || 0) / 5;
-  fl.texto = v("texto").value; fl.livres = v("livres").checked; fl.liga = v("liga").value; fl.pais = v("paisf").value;
-  fl.nacionalidade = v("nac").value; fl.valor_min = (+v("vmin").value || 0) * 1e6; fl.valor_max = (+v("vmax").value || 0) * 1e6;
+  fl.texto = v("texto").value; fl.liga = v("liga").value; fl.pais = v("paisf").value;
+  fl.nacionalidade = v("nac").value; fl.faixa = v("faixa").value; fl.situacao = v("situacao").value; fl.ordem = v("ordem").value;
+  fl.na_verba = v("naverba").checked;
+  const fx = FAIXAS.find((x) => x[0] === fl.faixa) || FAIXAS[0];
   const res = v("res");
   res.innerHTML = `<div class="vazio"><div class="anel"></div></div>`;
-  const m = await api("mercado", fl);
-  res.innerHTML = `<p class="minus" style="margin:8px 0">${m.jogadores.length} jogadores · janela ${m.janela ? "aberta" : "fechada"} · verba ${esc(m.orcamento)} · sem clube pode contratar a qualquer momento</p>
-    <div class="cartao lista">${m.jogadores.map((j) => `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome">${esc(j.nome)}</div>
-      <div class="minus">${esc(j.clube ? j.clube.nome : "Sem clube")} · ${esc(j.nac)} · ${j.idade_ok ? j.idade + " anos" : "idade CONFIRMAR"} · ${esc(j.valor)}</div></div><span class="nivel">${ovr(j)}</span></button>`).join("") || `<div class="vazio">Ninguém com esse filtro.</div>`}</div>`;
+  const m = await api("mercado", { posicao: fl.posicao, pais: fl.pais, liga: fl.liga, nacionalidade: fl.nacionalidade, idade_min: fl.idade_min,
+    idade_max: fl.idade_max, nivel_min: fl.nivel_min, texto: fl.texto, valor_min: fx[2], valor_max: fx[3], situacao: fl.situacao, ordem: fl.ordem,
+    na_verba: fl.na_verba, livres: fl.situacao === "livres" });
+  res.innerHTML = `<p class="minus" style="margin:8px 0">${m.jogadores.length} jogadores${m.jogadores.length >= 120 ? " (os 120 primeiros)" : ""} · janela ${m.janela ? "aberta" : "fechada"} · verba ${esc(m.orcamento)} · sem clube pode contratar a qualquer momento</p>
+    <div class="cartao lista">${m.jogadores.map((j) => {
+      const tag = j.lista_clube === "venda" ? chip("Lista de transferência", "ok") : j.lista_clube === "emprestimo" ? chip("Empréstimo: só salário", "al") : !j.clube ? chip("Sem clube", "") : "";
+      const preco = j.lista_clube === "venda" ? `${esc(j.preco)} <s class="minus">${esc(j.valor)}</s>` : j.lista_clube === "emprestimo" ? `salário ${esc(j.salario)}` : esc(j.valor);
+      return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
+      <div class="minus">${esc(j.clube ? j.clube.nome : "Sem clube")} · ${esc(j.nac)} · ${textoIdade(j)}</div>
+      <div class="minus" style="margin-top:2px">${preco}</div>${tag ? `<div style="margin-top:4px">${tag}</div>` : ""}</div><span class="nivel ${corOvr(ovr(j))}">${ovr(j)}</span></button>`;
+    }).join("") || `<div class="vazio">Ninguém com esse filtro.</div>`}</div>`;
   res.querySelectorAll("[data-j]").forEach((b) => b.onclick = () => abrirJogador(+b.dataset.j, false));
 }
 async function formProposta(j) {
@@ -938,7 +980,6 @@ async function formProposta(j) {
     const t = q("tipo").value;
     const caixa = q("sugestao");
     if (!caixa) return;
-    if (t === "emprestimo") { caixa.innerHTML = ""; return; }
     const s = await api("sugestao", { jogador: j.id, tipo: t === "multa" ? "pre_contrato_sem_luvas" : t, papel: q("papel") ? q("papel").value : "Rodízio", anos: q("anos") ? +q("anos").value : 3 });
     if (!s || !s.ok) { caixa.innerHTML = ""; return; }
     const linhas = [];
@@ -946,6 +987,7 @@ async function formProposta(j) {
     linhas.push(`<li>Salário mensal: mínimo para negociar <b>${dinheiro(s.salario_minimo)}</b>, garante o sim <b>${dinheiro(s.salario_seguro)}</b></li>`);
     if (s.luvas) linhas.push(`<li>Luvas esperadas <b>${dinheiro(s.luvas)}</b> e comissão do empresário <b>${dinheiro(s.comissao)}</b></li>`);
     if (s.valor_seguro && t !== "multa") linhas.push(`<li>Sua verba de transferências: <b>${dinheiro(s.verba)}</b></li>`);
+    if (t === "emprestimo") linhas.unshift(`<li>Empréstimo seco pagando 100% do salário é o caminho mais simples${s.lista === "emprestimo" ? ": esse jogador está na lista e sai sem taxa" : ""}</li>`);
     caixa.innerHTML = `<div class="cartao" style="margin:8px 0"><strong>Sugestão do diretor de futebol</strong>
       <ol class="sub" style="margin:6px 0 0 18px">${linhas.join("")}</ol>
       ${s.avisos.map((a) => `<p class="minus" style="margin-top:6px">${esc(a)}</p>`).join("")}
@@ -965,7 +1007,10 @@ async function formProposta(j) {
     sugerir();
   };
   f.querySelector("#tipo").onchange = redesenhar;
+  if (j.lista_clube === "emprestimo") f.querySelector("#tipo").value = "emprestimo";
   redesenhar();
+  if (j.lista_clube === "emprestimo" && f.querySelector("#pct")) { f.querySelector("#pct").value = "1"; }
+  if (j.lista_clube === "venda" && f.querySelector("#valor")) { f.querySelector("#valor").value = Math.round(j.preco_num); }
   f.querySelector("#enviar").onclick = async () => {
     const q = (id) => f.querySelector("#" + id);
     const t = q("tipo").value;
@@ -1046,6 +1091,7 @@ async function telaClube() {
   const campeoes = await api("campeoes");
   app.innerHTML = `
     <h2>${esc(e.clube.nome)}</h2>
+    <div id="gestao"></div>
     <h3>Estilo de jogo</h3>
     <div class="cartao lista">${e.taticas.map(([k, nome, desc]) => `<button class="item" data-t="${k}"><div class="cresce"><div class="nome">${esc(nome)}</div><div class="minus">${esc(desc)}</div></div>${k === e.tatica ? chip("Atual", "ok") : ""}</button>`).join("")}</div>
     <h3>Finanças</h3>
@@ -1086,10 +1132,42 @@ async function telaClube() {
   };
   $("noticias").onclick = async () => {
     const ns = await api("noticias");
-    folha(`<h2>Notícias</h2><div class="cartao lista">${ns.map((n) => `<div class="item" style="display:block"><div class="minus">${esc(n.data)}</div><div>${esc(n.texto)}</div></div>`).join("")}</div>`);
+    folha(`<h2>Central de notícias</h2><div class="cartao lista">${ns.map(itemNoticia).join("")}</div>`);
   };
   $("dados").onclick = () => ir("dados");
   $("inicio").onclick = () => ir("inicio");
+  desenharGestao();
+}
+async function desenharGestao() {
+  const alvo = document.getElementById("gestao");
+  if (!alvo) return;
+  const g = await api("gestao");
+  const p = g.peneira;
+  alvo.innerHTML = `
+    <h3>Investimentos</h3>
+    <div class="cartao"><div class="entre"><span class="sub">Caixa</span><strong>${esc(g.caixa)}</strong></div>
+      <div class="entre"><span class="sub">Manutenção mensal da estrutura</span><strong>${esc(g.manutencao)}</strong></div>
+      <p class="minus" style="margin-top:6px">Lesões duram ${Math.round(g.fator_dm * 100)}% do tempo normal · receita de jogo ${Math.round(g.fator_receita * 100)}% do normal.</p></div>
+    <div class="cartao lista">${g.areas.map((a) => `<div class="item" style="display:block">
+      <div class="entre"><strong>${esc(a.nome)}</strong><span class="nivel">${a.nivel}<span class="minus">/10</span></span></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${a.nivel * 10}%"></i></div>
+      <div class="minus">${esc(a.descricao)}</div>
+      ${a.custo ? `<button class="btn ${a.pode ? "" : "sec"} peq" data-inv="${a.id}" style="margin-top:8px" ${a.pode ? "" : "disabled"}>Subir para ${a.nivel + 1} · ${esc(a.custo)}</button>` : `<p class="chip ok" style="margin-top:6px">Nível máximo</p>`}</div>`).join("")}</div>
+    <h3>Peneira da base</h3>
+    <div class="cartao"><p class="sub">Olheiros e estrutura da base decidem quantos garotos aparecem e o quanto podem crescer. Nomes gerados pelo jogo, de acordo com o país.</p>
+      ${p.candidatos.length ? `<div class="lista" style="margin-top:8px">${p.candidatos.map((c) => `<div class="item"><span class="pos">${esc(c.pos)}</span><div class="cresce"><div class="nome quebra">${esc(c.nome)}</div>
+        <div class="minus">${c.idade} anos · ${esc(c.pais)} · potencial ${c.pot_min} a ${c.pot_max}</div></div><span class="nivel">${c.ovr}</span>
+        <button class="btn peq" data-jovem="${c.i}" style="margin-left:6px">Assinar</button></div>`).join("")}</div>
+        <button class="btn sec peq" id="dispensar" style="margin-top:8px">Dispensar os que sobraram</button>` : ""}
+      <button class="btn ${p.libera ? "sec" : ""}" id="peneira" style="margin-top:10px" ${p.libera ? "disabled" : ""}>${p.libera ? "Próxima peneira em " + esc(p.libera) : "Fazer peneira · " + esc(p.custo)}</button></div>
+    ${g.premios.length ? `<h3>Premiações recebidas</h3><div class="cartao lista">${g.premios.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(x.comp)}</strong><strong style="color:#9be8b4">${esc(x.valor)}</strong></div><div class="minus">${esc(x.colocacao)} · ${x.ano}</div></div>`).join("")}</div>` : ""}
+    <h3>Extrato</h3>
+    <div class="cartao lista" style="max-height:320px;overflow:auto">${g.extrato.map((x) => `<div class="item" style="display:block"><div class="entre"><span class="minus">${esc(x.data)}</span><strong style="color:${x.entrada ? "#9be8b4" : "#ff9d9d"}">${x.entrada ? "+ " : "menos "}${esc(x.valor)}</strong></div><div class="sub" style="font-size:13.5px">${esc(x.texto)}</div></div>`).join("") || `<div class="vazio">As movimentações aparecem a cada virada de mês, investimento, prêmio ou imprevisto.</div>`}</div>
+    <p class="minus">${esc(g.aviso)}</p>`;
+  alvo.querySelectorAll("[data-inv]").forEach((b) => b.onclick = async () => { const r = await api("investir", { area: b.dataset.inv }); aviso(r.texto || r.erro); S.estado = await api("estado"); desenharGestao(); });
+  alvo.querySelectorAll("[data-jovem]").forEach((b) => b.onclick = async () => { const r = await api("contratar_jovem", { indice: +b.dataset.jovem }); aviso(r.texto || r.erro); desenharGestao(); });
+  const pb = alvo.querySelector("#peneira"); if (pb) pb.onclick = async () => { const r = await api("peneira"); aviso(r.texto || r.erro); desenharGestao(); };
+  const db = alvo.querySelector("#dispensar"); if (db) db.onclick = async () => { await api("dispensar_peneira"); desenharGestao(); };
 }
 
 // ---------------------------------------------------------------------------
