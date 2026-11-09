@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "0ee5e923dad0";
+const VERSAO_APP = "0828ae5e8550";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
