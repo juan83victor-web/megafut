@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "4d74d64dcce3";
+const VERSAO_APP = "45fae754e933";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -555,6 +555,7 @@ function telaPainel() {
     <div class="entre"><div class="linha">${escudo(e.clube.sigla)}<div><h2 style="margin:0">${esc(e.clube.nome)}</h2>
       <p class="sub">${esc(e.clube.liga || "Sem liga nacional")} · técnico ${esc(e.clube.tecnico)}</p></div></div>
       <div style="text-align:right"><div class="num" style="font-size:22px">${esc(e.data)}</div><div class="minus">${dias[e.dia_semana]}</div></div></div>
+    <div id="semana"></div>
     <h3>Próximo jogo</h3>
     ${cartaoJogo(e.proximo, true)}
     ${mancheteHtml(e.manchete)}
@@ -586,6 +587,13 @@ function telaPainel() {
     <div class="cartao lista">${e.noticias.length ? e.noticias.map(itemNoticia).join("") : `<div class="vazio">Sem notícias ainda.</div>`}</div>`;
   const $ = (id) => document.getElementById(id);
   app.querySelectorAll("[data-abrir-comp]").forEach((b) => b.onclick = () => { S.compAberta = b.dataset.abrirComp; ir("jogos"); });
+  (async () => {
+    try { if (!S.agenda || S.agenda.hoje !== isoDe(dataBr(e.data))) S.agenda = await api("agenda"); } catch (err) { return; }
+    const alvo = document.getElementById("semana");
+    if (!alvo) return;
+    alvo.innerHTML = semanaHtml(S.agenda);
+    const b = document.getElementById("vercal"); if (b) b.onclick = () => { S.verCalendario = true; ir("portal"); };
+  })();
   $("avancar").onclick = () => avancar("jogo", true);
   $("simular").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
@@ -603,10 +611,94 @@ function tabelaHtml(linhas, meu, curta = false) {
     ${linhas.map((l) => `<tr class="${l.clube.id === meu ? "eu" : ""}"><td>${l.pos}</td><td>${esc(l.clube.nome)}</td><td><strong>${l.p}</strong></td><td>${l.j}</td>
       ${curta ? "" : `<td>${l.v}</td><td>${l.e}</td><td>${l.d}</td>`}<td>${esc(sinal(l.sg))}</td>${curta ? "" : `<td style="letter-spacing:1px">${esc(l.ult)}</td>`}</tr>`).join("")}</table>`;
 }
+
+// ---------------------------------------------------------------------------
+// Calendário: semana no painel, ano no portal e os dias passando
+// ---------------------------------------------------------------------------
+const DIAS_CURTOS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+function isoDe(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function dataBr(t) { const [d, m, a] = String(t).split("/").map(Number); return new Date(a, m - 1, d); }
+function dataIso(t) { const [a, m, d] = String(t).split("-").map(Number); return new Date(a, m - 1, d); }
+function maisDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function semanaIdx(d) { return (d.getDay() + 6) % 7; }
+function mapaAgenda(ag) {
+  const mapa = {};
+  (ag.jogos || []).forEach((j) => { (mapa[j.data] = mapa[j.data] || {}).jogo = j; });
+  const marcar = (lista, chave) => (lista || []).forEach((p) => { for (let d = dataIso(p.inicio); d <= dataIso(p.fim); d = maisDias(d, 1)) (mapa[isoDe(d)] = mapa[isoDe(d)] || {})[chave] = p; });
+  marcar(ag.janelas, "janela"); marcar(ag.pausas, "pausa");
+  return mapa;
+}
+function celulaDia(d, mapa, hojeIso, extra = "") {
+  const k = isoDe(d), info = mapa[k] || {}, j = info.jogo;
+  const cls = ["dia", extra, k === hojeIso ? "hoje" : "", k < hojeIso ? "passado" : "", info.janela ? "janela" : "", info.pausa ? "pausa" : ""].join(" ");
+  const jogo = j ? `<span class="jg cat-${j.cat} ${j.res ? "r-" + j.res : ""}" title="${esc(j.competicao)}">${j.casa ? "" : "@"}${esc(j.rival.sigla)}${j.res ? " " + j.res : ""}</span>` : "";
+  return `<div class="${cls}" data-dia="${k}">${extra.includes("semds") ? "" : `<div class="ds">${DIAS_CURTOS[semanaIdx(d)]}</div>`}<div class="dn">${d.getDate()}</div>${jogo}</div>`;
+}
+function semanaHtml(ag) {
+  const mapa = mapaAgenda(ag), hoje = dataIso(ag.hoje), hojeIso = ag.hoje;
+  const dias = Array.from({ length: 7 }, (_, i) => maisDias(hoje, i));
+  const jogosSemana = dias.map((d) => (mapa[isoDe(d)] || {}).jogo).filter(Boolean);
+  const janela = (mapa[hojeIso] || {}).janela;
+  return `<div class="entre"><h3 style="margin:14px 0 0">Sua semana</h3><button class="btn sec peq" id="vercal">Calendário do ano</button></div>
+    <div class="semana">${dias.map((d) => celulaDia(d, mapa, hojeIso)).join("")}</div>
+    <p class="minus">${jogosSemana.length ? jogosSemana.map((j) => `${esc(j.rival.nome)} (${j.casa ? "casa" : "fora"}) pela ${esc(j.competicao)}`).join(" · ") : "Sem jogos nos próximos 7 dias."}${janela ? " · Janela aberta até " + dataIso(janela.fim).toLocaleDateString("pt-BR") : ""}</p>`;
+}
+function calendarioAnualHtml(ag, mes) {
+  const mapa = mapaAgenda(ag), hojeIso = ag.hoje, ano = ag.ano;
+  const primeiro = new Date(ano, mes, 1), ultimo = new Date(ano, mes + 1, 0);
+  const vazios = Array.from({ length: semanaIdx(primeiro) }, () => `<div class="dia vazio"></div>`).join("");
+  const dias = Array.from({ length: ultimo.getDate() }, (_, i) => celulaDia(new Date(ano, mes, i + 1), mapa, hojeIso, "semds")).join("");
+  const contagem = (m) => (ag.jogos || []).filter((j) => dataIso(j.data).getMonth() === m && dataIso(j.data).getFullYear() === ano).length;
+  const jogosMes = (ag.jogos || []).filter((j) => { const d = dataIso(j.data); return d.getMonth() === mes && d.getFullYear() === ano; });
+  const janelasMes = (ag.janelas || []).filter((p) => dataIso(p.inicio) <= ultimo && dataIso(p.fim) >= primeiro);
+  return `<div class="meses">${MESES.map((n, i) => `<button class="${i === mes ? "on" : ""}" data-mes="${i}">${n.slice(0, 3)}<i>${contagem(i) ? contagem(i) + (contagem(i) > 1 ? " jogos" : " jogo") : "·"}</i></button>`).join("")}</div>
+    <div class="cartao"><div class="entre"><button class="btn sec peq" data-mes="${Math.max(0, mes - 1)}">‹</button><strong class="num" style="font-size:22px;text-transform:uppercase">${MESES[mes]} ${ano}</strong><button class="btn sec peq" data-mes="${Math.min(11, mes + 1)}">›</button></div>
+      <div class="mes-cab">${DIAS_CURTOS.map((d) => `<div>${d}</div>`).join("")}</div><div class="mes">${vazios}${dias}</div>
+      <div class="legenda"><span class="cat-nacional">Campeonato</span><span class="cat-copa">Copa</span><span class="cat-internacional">Internacional</span><span class="l-janela">Janela de transferências</span><span class="l-pausa">Pausa</span></div></div>
+    ${janelasMes.map((p) => `<p class="minus">${esc(p.nome)}: ${dataIso(p.inicio).toLocaleDateString("pt-BR")} a ${dataIso(p.fim).toLocaleDateString("pt-BR")}${p.confirmado ? "" : " (CONFIRMAR)"}</p>`).join("")}
+    <div class="cartao lista">${jogosMes.map((j) => `<div class="item cat-${j.cat}"><span class="pos" style="background:var(--cat);color:#0a140e">${dataIso(j.data).getDate()}</span><div class="cresce"><div class="nome">${j.casa ? "x" : "@"} ${esc(j.rival.nome)}</div><div class="minus">${esc(j.competicao)} · ${esc(j.fase)}</div></div><strong>${j.placar ? esc(j.placar) + " " + j.res : ""}</strong></div>`).join("") || `<div class="vazio">Sem jogos marcados neste mês.</div>`}</div>
+    <p class="minus">Jogos de mata mata aparecem quando o confronto é definido.</p>`;
+}
+function abrirCalendario(ag, alvo, mesInicial) {
+  let mes = mesInicial ?? dataIso(ag.hoje).getMonth();
+  const desenhar = () => {
+    alvo.innerHTML = calendarioAnualHtml(ag, mes);
+    alvo.querySelectorAll("[data-mes]").forEach((b) => b.onclick = () => { mes = +b.dataset.mes; desenhar(); });
+    const on = alvo.querySelector(".meses .on"); if (on) on.scrollIntoView({ inline: "center", block: "nearest" });
+  };
+  desenhar();
+}
+async function passagemDosDias(de, ate, ag) {
+  const total = Math.round((ate - de) / 86400000);
+  if (!(total > 0) || total > 120) return;
+  const mapa = ag ? mapaAgenda(ag) : {};
+  const ov = document.createElement("div");
+  ov.className = "passagem";
+  document.body.appendChild(ov);
+  const passo = Math.max(70, Math.min(260, 2600 / total));
+  for (let i = 0; i <= total; i++) {
+    const d = maisDias(de, i), mesD = d.getMonth(), anoD = d.getFullYear();
+    const primeiro = new Date(anoD, mesD, 1), ultimo = new Date(anoD, mesD + 1, 0);
+    const vazios = Array.from({ length: semanaIdx(primeiro) }, () => `<div class="dia vazio"></div>`).join("");
+    const dias = Array.from({ length: ultimo.getDate() }, (_, k) => { const x = new Date(anoD, mesD, k + 1); return celulaDia(x, mapa, "", "semds " + (isoDe(x) === isoDe(d) ? "atual" : isoDe(x) === isoDe(ate) ? "alvo" : "")); }).join("");
+    const info = mapa[isoDe(d)] || {};
+    ov.innerHTML = `<div class="caixa"><div class="mesnome">${MESES[mesD]} ${anoD}</div><div class="grande">${d.getDate()}</div>
+      <p class="sub" style="text-align:center">${DIAS_CURTOS[semanaIdx(d)]} · ${i === total ? "Dia de jogo" : "faltam " + (total - i) + (total - i === 1 ? " dia" : " dias")}${info.janela ? " · janela aberta" : ""}</p>
+      <div class="mes-cab" style="margin-top:10px">${DIAS_CURTOS.map((x) => `<div>${x}</div>`).join("")}</div><div class="mes">${vazios}${dias}</div></div>`;
+    await new Promise((r) => setTimeout(r, i === total ? 450 : passo));
+  }
+  ov.remove();
+}
+
 async function avancar(modo, aoVivo = false) {
+  const e0 = S.estado || {};
+  const de = e0.data ? dataBr(e0.data) : null;
+  const ate = !de ? null : modo === "dia" ? maisDias(de, 1) : e0.proximo ? dataBr(e0.proximo.data) : null;
   carregando(modo === "dia" ? "Um dia no mundo do futebol" : "Rodando o mundo até o seu jogo");
   try {
-    const r = await api("avancar", { modo, ao_vivo: aoVivo });
+    const [r] = await Promise.all([api("avancar", { modo, ao_vivo: aoVivo }), de && ate ? passagemDosDias(de, ate, S.agenda) : null]);
+    S.agenda = null;
     S.estado = r.estado;
     if (r.ao_vivo) { ir("aovivo"); return; }
     if (r.partida) { S.partida = r.partida; S.fim = r.fim_de_temporada; ir("partida"); }
@@ -1424,6 +1516,7 @@ async function telaPortal() {
       <div class="barra" style="margin:6px 0"><i style="width:${p.confianca}%"></i></div>
       <div class="entre"><span class="sub">Risco de demissão</span>${chip(p.risco, corRisco)}</div>`}
     </div>
+    ${p.desempregado ? "" : `<h3 id="ancora-cal">Calendário da temporada</h3><div id="calanual"><div class="vazio">Carregando o calendário</div></div>`}
     ${p.ofertas_emprego.length ? `<h3>Propostas de emprego</h3><div class="cartao lista">${p.ofertas_emprego.map((o) => `<div class="item" style="display:block">
       <div class="entre"><strong>${esc(o.nome)}</strong><span class="nivel ${corOvr(o.forca)}">${o.forca}</span></div>
       <div class="minus">${esc(o.pais)} · reputação ${o.reputacao} · o clube ${esc(o.motivo)} · vale até ${esc(o.validade)}</div>
@@ -1450,6 +1543,11 @@ async function telaPortal() {
       <div class="minus">${x.j} jogos · ${x.v}V ${x.e}E ${x.d}D · ${x.aproveitamento}%${x.saida ? " · " + esc(x.saida) : ""}</div>
       ${x.titulos.length ? `<div style="margin-top:4px">${x.titulos.map((t) => `<span class="traco bom">${esc(t)}</span>`).join("")}</div>` : ""}</div>`).join("")}</div>
     <p class="minus">${esc(p.aviso)}</p>`;
+  const cal = document.getElementById("calanual");
+  if (cal) {
+    try { S.agenda = await api("agenda"); abrirCalendario(S.agenda, cal); } catch (err) { cal.innerHTML = `<div class="vazio">${esc(err.message)}</div>`; }
+    if (S.verCalendario) { S.verCalendario = false; document.getElementById("ancora-cal").scrollIntoView({ block: "start" }); }
+  }
   app.querySelectorAll("[data-patro]").forEach((b) => b.onclick = async () => { const r = await api("patrocinio", { oferta: +b.dataset.patro }); aviso(r.texto || r.erro); telaPortal(); });
   app.querySelectorAll("[data-emprego]").forEach((b) => b.onclick = () => {
     const f = folha(`<h2>Assumir o ${b.dataset.nome}?</h2><p class="sub">${p.desempregado ? "" : "Você deixa o clube atual agora. "}O elenco, as metas e o caixa passam a ser os do novo clube. A carreira continua contando.</p>
