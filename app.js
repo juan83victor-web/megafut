@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "fcf45cb0aa25";
+const VERSAO_APP = "8a5d628c131a";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -570,7 +570,7 @@ function telaPainel() {
       return itens.length ? `<button class="cartao destaque item" id="irportal" style="margin-top:12px"><div class="cresce"><strong>Portal do treinador</strong><div class="minus">${itens.map(esc).join(" · ")}</div></div>${chip("Abrir", "al")}</button>` : ""; })()}
     ${al.contratos ? `<div class="cartao"><strong>${al.contratos} contrato${al.contratos > 1 ? "s" : ""} terminando em 31/12</strong><p class="minus">Sem renovação, o jogador sai no fim do ano. Elenco, toque no jogador, Renovar.</p></div>` : ""}
     ${(al.lesionados || []).length ? `<p class="minus" style="margin-top:6px">No departamento médico: ${esc(al.lesionados.join(", "))}</p>` : ""}
-    ${e.tabela && e.tabela.length && !(e.manchete && e.manchete.comp === e.liga_id) ? `<h3>${esc(e.clube.liga)}</h3><div class="cartao">${tabelaHtml(e.tabela, e.clube.id, true)}
+    ${e.tabela && e.tabela.length && !e.manchete ? `<h3>${esc(e.clube.liga)}</h3><div class="cartao">${tabelaHtml(e.tabela, e.clube.id, true)}
       <button class="btn sec peq" id="tab" style="margin-top:8px">Tabela completa</button></div>` : ""}
     <div class="grade2" style="margin-top:4px">
       <div class="cartao"><p class="minus">Torcida</p><div class="entre"><strong>${esc(e.torcida.rotulo)}</strong><span class="num" style="font-size:22px">${e.torcida.valor}</span></div><div class="barra"><i style="width:${e.torcida.valor}%"></i></div></div>
