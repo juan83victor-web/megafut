@@ -91,7 +91,7 @@ const GRUPOS_PLANTEL = [["GOL", "Goleiros"], ["ZAG", "Zagueiros"], ["LD", "Later
   ["MEI", "Meias"], ["PD", "Pontas direitos"], ["PE", "Pontas esquerdos"], ["PON", "Pontas (lado a confirmar)"], ["ATA", "Atacantes"]];
 // Nome e sobrenome: primeiro e último nome quando a fonte traz mais de dois; apelido fica como está
 function corOvr(n) { return n >= 75 ? "o1" : n >= 65 ? "o2" : n >= 52 ? "o3" : "o4"; }
-function textoIdade(j) { return j.idade_ok ? j.idade + " anos" : "~" + j.idade + " anos (estimada)"; }
+function textoIdade(j) { return j.idade_ok ? j.idade + " anos" : "idade sem fonte"; }
 function nomeSobrenome(nome) {
   const p = String(nome || "").replace(/\s*\(.*?\)\s*/g, " ").trim().split(/\s+/).filter(Boolean);
   if (p.length <= 2) return p.join(" ");
@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "45fae754e933";
+const VERSAO_APP = "04bdafb28d6f";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -1169,7 +1169,7 @@ async function abrirJogador(id, meu) {
       <div style="text-align:right"><span class="num" style="font-size:40px">${ovr(j)}</span><div class="minus">OVR</div></div></div>
     <div class="cartao">
       <div class="entre"><span class="sub">Clube</span><strong>${esc(j.clube ? j.clube.nome : "Sem clube")}</strong></div>
-      <div class="entre"><span class="sub">Idade</span><strong>${j.idade_ok ? j.idade + " anos" : "~" + j.idade + " (estimada, CONFIRMAR)"}</strong></div>
+      <div class="entre"><span class="sub">Idade</span><strong>${j.idade_ok ? j.idade + " anos" : "CONFIRMAR (sem fonte; o jogo usa ~" + j.idade + ")"}</strong></div>
       ${j.pe && j.pe !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Pé</span><strong>${esc(j.pe)}</strong></div>` : ""}
       ${j.altura && j.altura !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Altura e peso</span><strong>${esc(j.altura)} cm${j.peso && j.peso !== "CONFIRMAR" ? " · " + esc(j.peso) + " kg" : ""}</strong></div>` : ""}
       <div class="entre"><span class="sub">Nacionalidade</span><strong>${esc(j.nac)}</strong></div>
