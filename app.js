@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "8a5d628c131a";
+const VERSAO_APP = "4d74d64dcce3";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -928,11 +928,23 @@ async function telaElenco() {
     ${abasElenco()}
     <p class="minus">${fonte(el.fonte, "Elenco")} ${el.data_fonte ? "· " + esc(el.data_fonte) : ""}</p>
     ${GRUPOS_PLANTEL.filter(([p]) => grupos[p]).map(([p, titulo]) => `<h3>${titulo} (${grupos[p].length})</h3><div class="cartao lista">${grupos[p].sort((a, b) => ovr(b) - ovr(a)).map((j) => linhaJogador(j)).join("")}</div>`).join("")}
-    <p class="minus">OVR de 0 a 100. Atletas que estão no EA SPORTS FC 26 usam a nota do jogo como referência; os outros são estimados pela hierarquia do elenco (camisa, base, capitão, estrangeiro). LE e LD só quando a fonte diz o lado.</p>
-    ${el.emprestados.length ? `<h3>Emprestados a outros clubes</h3><div class="cartao lista">${el.emprestados.map((j) => `<div class="item"><span class="pos">${esc(j.pos)}</span><div class="cresce"><div class="nome">${esc(j.nome)}</div><div class="minus">${esc(j.clube || "Clube fora do jogo")}</div></div></div>`).join("")}</div>` : ""}
+    <p class="minus">OVR de 0 a 100. Quem está no EA SPORTS FC 26 usa a nota do jogo. Quem já teve nota no FC 25 ou no FIFA 22 usa a última nota, ajustada pela idade. Os outros são estimados pela hierarquia do elenco e calibrados pelos colegas que têm nota EA. LE e LD só quando a fonte diz o lado.</p>
+    ${el.emprestados.length ? `<h3>Emprestados a outros clubes</h3><div class="cartao lista">${el.emprestados.map((j) => {
+      const evol = j.ovr_inicio !== null && j.ovr_inicio !== undefined ? j.ovr - j.ovr_inicio : null;
+      return `<div class="item" style="display:block"><div class="linha"><span class="pos">${esc(j.pos)}</span><div class="cresce"><div class="nome">${esc(j.nome)}</div>
+        <div class="minus">${esc(j.clube || "Clube fora do jogo")}${j.ate ? " · até " + esc(j.ate) : ""}</div></div>
+        <div style="text-align:right"><span class="nivel">${j.ovr}</span>${evol !== null ? `<div class="minus" style="color:${evol > 0 ? "var(--verde)" : evol < 0 ? "var(--vermelho)" : "var(--giz3)"}">${evol > 0 ? "+" + evol : evol === 0 ? "=" : evol} desde a ida</div>` : ""}</div></div>
+        <div class="grade2" style="margin-top:6px;grid-template-columns:repeat(3,1fr)"><div class="minus">Jogos <strong>${j.jogos}</strong></div><div class="minus">Gols <strong>${j.gols}</strong></div><div class="minus">Assist. <strong>${j.ass}</strong></div></div>
+        ${j.pode_chamar ? `<button class="btn sec peq" data-volta="${j.id}" data-multa="${esc(j.multa || "")}" style="margin-top:6px;width:100%">Chamar de volta (multa ${esc(j.multa || "R$ 0")})</button>` : ""}</div>`; }).join("")}</div>
+      <p class="minus">Jogos, gols e assistências na temporada. A multa é proporcional ao tempo que falta de empréstimo (estimativa do Megafut) e só vale com a janela aberta.</p>` : ""}
     <p class="minus" style="margin-top:10px">${esc(el.aviso)}</p>`;
   ligarAbasElenco();
   app.querySelectorAll("[data-j]").forEach((b) => b.onclick = () => abrirJogador(+b.dataset.j, true));
+  app.querySelectorAll("[data-volta]").forEach((b) => b.onclick = async () => {
+    if (!b.dataset.ok) { b.dataset.ok = "1"; b.textContent = "Toque de novo para pagar " + b.dataset.multa + " e trazer de volta"; b.classList.remove("sec"); return; }
+    try { const r = await api("chamar_de_volta", { jogador: +b.dataset.volta }); aviso(r.texto); S.estado = await api("estado"); telaElenco(); }
+    catch (e) { aviso(e.message); b.dataset.ok = ""; b.classList.add("sec"); b.textContent = "Chamar de volta (multa " + b.dataset.multa + ")"; }
+  });
 }
 function abasElenco() {
   return `<div class="abas"><button class="aba ${S.abaElenco === "campo" ? "on" : ""}" data-ae="campo">Escalação</button><button class="aba ${S.abaElenco === "lista" ? "on" : ""}" data-ae="lista">Plantel</button></div>`;
