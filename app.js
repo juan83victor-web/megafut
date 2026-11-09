@@ -99,6 +99,7 @@ function nomeSobrenome(nome) {
   return p[0] + " " + ultimo;
 }
 const ovr = (j) => (j.ovr ?? (j.nivel != null ? Math.round(j.nivel * 5) : "")); 
+const ovrMostra = (j) => (j.conhec != null && j.conhec < 100 && j.ovr_txt ? j.ovr_txt.replace(" a ", "~") : ovr(j));
 
 // ---------------------------------------------------------------------------
 // Saves: banco do artifact (durável) e cópia local
@@ -130,7 +131,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "ff9a2998450a";
+const VERSAO_APP = "b9ff34cc137f";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -1155,10 +1156,11 @@ function linhaJogador(j) {
   if (j.listado) sinais.push(chip(j.listado === "venda" ? "À venda" : "Para empréstimo", "al"));
   if (j.emprestado_por) sinais.push(chip("Emprestado", ""));
   if (j.onze) sinais.push(chip("Titular", "ok"));
+  if (j.carga_tom === "alerta" || j.carga_tom === "ruim") sinais.push(chip(`${j.carga_txt}: ${j.carga} jogos em 14 dias`, j.carga_tom === "ruim" ? "ruim" : "al"));
   const dm = j.lesao_info ? `<div class="dm">DM: ${esc(j.lesao_info.diagnostico)} · volta ${esc(j.lesao_info.volta)} · ${j.lesao_info.jogos ? "perde " + plural(j.lesao_info.jogos, "jogo", "jogos") : "sem jogos no período"}</div>` : "";
   return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
     <div class="minus">${textoIdade(j)} · moral ${j.moral} · ${plural(j.jogos, "jogo", "jogos")}${j.gols ? ", " + plural(j.gols, "gol", "gols") : ""}</div>${dm}
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span class="nivel ${corOvr(ovr(j))}">${ovr(j)}</span></button>`;
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span class="nivel ${corOvr(ovr(j))}">${ovrMostra(j)}</span></button>`;
 }
 async function abrirJogador(id, meu) {
   const f = folha(`<div class="vazio"><div class="anel"></div></div>`);
@@ -1166,9 +1168,16 @@ async function abrirJogador(id, meu) {
   const attrs = j.atributos ? Object.entries(j.atributos).map(([g, v]) => `<h3>${esc(g)}</h3><div class="grade2">${Object.entries(v).map(([k, n]) => `<div class="entre"><span class="minus">${esc(k.replace(/_/g, " "))}</span><strong>${n}</strong></div>`).join("")}</div>`).join("") : "";
   f.innerHTML = `
     <div class="entre"><div><h2 style="margin:0">${esc(j.nome)}</h2><p class="sub">${esc(j.rotulo && j.rotulo !== j.pos ? j.rotulo + " · " : "")}${esc(j.posicao)}${j.sec.length ? " · também " + esc(j.sec.join(", ")) : ""}${j.pos_ok ? "" : " · posição detalhada CONFIRMAR"}</p></div>
-      <div style="text-align:right"><span class="num" style="font-size:40px">${ovr(j)}</span><div class="minus">OVR</div></div></div>
+      <div style="text-align:right"><span class="num" style="font-size:${j.conhec < 100 ? 26 : 40}px">${j.conhec < 100 ? esc(j.ovr_txt) : ovr(j)}</span><div class="minus">${j.conhec < 100 ? "OVR estimado" : "OVR"}</div></div></div>
+    ${j.conhec < 100 ? `<div class="cartao"><div class="entre"><span class="sub">Conhecimento do seu clube</span><strong>${j.conhec}%</strong></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${j.conhec}%"></i></div>
+      <div class="entre"><span class="sub">Potencial estimado</span><strong>${esc(j.pot_txt)}</strong></div>
+      <p class="minus" style="margin-top:6px">${j.oculto ? "Atributos e personalidade escondidos até 70% de conhecimento. " : ""}O olheiro também erra: quanto pior a rede de observação, mais a faixa pode estar deslocada do nível real.</p>
+      ${j.olheiro ? `<button class="btn sec" id="observar" style="margin-top:8px" ${j.olheiro.restam ? "" : "disabled"}>Enviar olheiro · ${esc(j.olheiro.custo)} · restam ${j.olheiro.restam} de ${j.olheiro.por_semana} nesta semana</button>` : ""}</div>` : ""}
     <div class="cartao">
       <div class="entre"><span class="sub">Clube</span><strong>${esc(j.clube ? j.clube.nome : "Sem clube")}</strong></div>
+      ${j.perfil_clube ? `<div class="entre"><span class="sub">Diretoria do clube</span><strong>${esc(j.perfil_clube)}</strong></div>` : ""}
+      ${j.carga_txt ? `<div class="entre"><span class="sub">Carga</span><strong>${esc(j.carga_txt)} (${plural(j.carga, "jogo", "jogos")} em 14 dias)</strong></div>` : ""}
       <div class="entre"><span class="sub">Idade</span><strong>${j.idade_ok ? j.idade + " anos" : "CONFIRMAR (sem fonte; o jogo usa ~" + j.idade + ")"}</strong></div>
       ${j.pe && j.pe !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Pé</span><strong>${esc(j.pe)}</strong></div>` : ""}
       ${j.altura && j.altura !== "CONFIRMAR" ? `<div class="entre"><span class="sub">Altura e peso</span><strong>${esc(j.altura)} cm${j.peso && j.peso !== "CONFIRMAR" ? " · " + esc(j.peso) + " kg" : ""}</strong></div>` : ""}
@@ -1196,6 +1205,8 @@ async function abrirJogador(id, meu) {
     <div id="acoes" style="display:grid;gap:8px;margin-top:12px"></div>
     ${attrs ? `<details style="margin-top:10px"><summary class="sub">Todos os atributos</summary>${attrs}</details>` : ""}`;
   const acoes = f.querySelector("#acoes");
+  const obs = f.querySelector("#observar");
+  if (obs) obs.onclick = async () => { const r = await api("observar", { jogador: j.id }); aviso(r.texto || r.erro); if (r.ok) abrirJogador(id, meu); };
   if (meu) {
     const listado = j.listado;
     acoes.innerHTML = `
@@ -1345,7 +1356,7 @@ async function buscarMercado() {
       const preco = j.lista_clube === "venda" ? `${esc(j.preco)} <s class="minus">${esc(j.valor)}</s>` : j.lista_clube === "emprestimo" ? `salário ${esc(j.salario)}` : esc(j.valor);
       return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
       <div class="minus">${esc(j.clube ? j.clube.nome : "Sem clube")} · ${esc(j.nac)} · ${textoIdade(j)}</div>
-      <div class="minus" style="margin-top:2px">${preco}</div>${tag ? `<div style="margin-top:4px">${tag}</div>` : ""}</div><span class="nivel ${corOvr(ovr(j))}">${ovr(j)}</span></button>`;
+      <div class="minus" style="margin-top:2px">${preco}${j.conhec < 100 ? ` · conhecido ${j.conhec}%` : ""}</div>${tag ? `<div style="margin-top:4px">${tag}</div>` : ""}</div><span class="nivel ${corOvr(ovr(j))}">${ovrMostra(j)}</span></button>`;
     }).join("") || `<div class="vazio">Ninguém com esse filtro.</div>`}</div>`;
   res.querySelectorAll("[data-j]").forEach((b) => b.onclick = () => abrirJogador(+b.dataset.j, false));
 }
@@ -1620,11 +1631,20 @@ async function desenharGestao() {
   if (!alvo) return;
   const g = await api("gestao");
   const p = g.peneira;
+  const fp = g.fpf;
   alvo.innerHTML = `
+    <h3>Fair Play Financeiro</h3>
+    <div class="cartao">${fp.sancao ? `<p class="chip ruim">Sob sanção nesta temporada</p>` : ""}
+      <div class="entre"><span class="sub">Resultado da temporada até agora</span><strong style="color:${fp.resultado_ano_num < 0 ? "var(--vermelho)" : "var(--verde)"}">${esc(fp.resultado_ano)}</strong></div>
+      <div class="entre"><span class="sub">Acumulado (três temporadas)</span><strong>${esc(fp.acumulado)}</strong></div>
+      <div class="entre"><span class="sub">Limite de prejuízo</span><strong>${esc(fp.limite)}</strong></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${Math.min(100, fp.uso)}%;${fp.uso >= 70 ? "background:var(--vermelho)" : ""}"></i></div>
+      <p class="minus">${fp.uso}% do limite usado. ${esc(fp.regra)}</p>${fp.aviso ? `<p class="sub" style="margin-top:6px">${esc(fp.aviso)}</p>` : ""}
+      ${fp.anteriores.length ? `<p class="minus" style="margin-top:6px">${fp.anteriores.map((a) => a.ano + ": " + esc(a.resultado)).join(" · ")}</p>` : ""}</div>
     <h3>Investimentos</h3>
     <div class="cartao"><div class="entre"><span class="sub">Caixa</span><strong>${esc(g.caixa)}</strong></div>
       <div class="entre"><span class="sub">Manutenção mensal da estrutura</span><strong>${esc(g.manutencao)}</strong></div>
-      <p class="minus" style="margin-top:6px">Lesões duram ${Math.round(g.fator_dm * 100)}% do tempo normal · receita de jogo ${Math.round(g.fator_receita * 100)}% do normal.</p></div>
+      <p class="minus" style="margin-top:6px">Lesões duram ${Math.round(g.fator_dm * 100)}% do tempo normal · receita de jogo ${Math.round(g.fator_receita * 100)}% do normal · olheiros fazem ${g.olheiros.por_semana} relatórios por semana.</p></div>
     <div class="cartao lista">${g.areas.map((a) => `<div class="item" style="display:block">
       <div class="entre"><strong>${esc(a.nome)}</strong><span class="nivel">${a.nivel}<span class="minus">/10</span></span></div>
       <div class="barra" style="margin:4px 0"><i style="width:${a.nivel * 10}%"></i></div>
