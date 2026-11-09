@@ -130,7 +130,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "b19563ef8837";
+const VERSAO_APP = "fcf45cb0aa25";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -258,6 +258,7 @@ function desenharMenu(tela) {
 
 async function desenhar() {
   const tela = telaAtual();
+  temaCompeticao(null);
   fecharFolha();
   desenharMenu(tela);
   window.scrollTo(0, 0);
@@ -510,10 +511,16 @@ async function abrirResumo(chave) {
 // ---------------------------------------------------------------------------
 // Painel
 // ---------------------------------------------------------------------------
+const ROTULO_CAT = { nacional: "Campeonato nacional", copa: "Copa", internacional: "Competição internacional" };
+function temaCompeticao(cat) {
+  document.body.classList.remove("cat-nacional", "cat-copa", "cat-internacional");
+  if (cat) document.body.classList.add("cat-" + cat);
+}
 function cartaoJogo(j, grande = false) {
   if (!j) return `<div class="cartao"><p class="sub">Sem jogo marcado agora.</p></div>`;
   const placar = j.gc !== null && j.gc !== undefined ? `${j.gc} x ${j.gf}${j.pc !== null && j.pc !== undefined ? ` <span class="minus">(${j.pc} x ${j.pf} nos pênaltis)</span>` : ""}` : "x";
-  return `<div class="cartao ${grande ? "destaque" : ""}">
+  return `<div class="cartao ${grande ? "destaque" : ""} ${j.cat ? "cat-" + j.cat : ""}">
+    ${j.cat ? `<span class="selo-cat">${ROTULO_CAT[j.cat]}</span>` : ""}
     <div class="entre"><span class="minus">${esc(j.competicao)}${j.fase && j.fase !== "Pontos corridos" ? " · " + esc(j.fase) : ""}${j.rodada ? " · rodada " + j.rodada : ""}</span>
       <span class="minus">${esc(j.data)}${j.adiado ? " · adiado" : ""}</span></div>
     <div class="entre" style="margin-top:10px">
@@ -522,8 +529,26 @@ function cartaoJogo(j, grande = false) {
       <div class="linha" style="flex:1;justify-content:flex-end"><strong style="text-align:right">${esc(j.fora.nome)}</strong>${escudo(j.fora.sigla, grande ? "" : "p")}</div>
     </div>${j.neutro ? `<p class="minus" style="margin-top:6px">Campo neutro</p>` : ""}</div>`;
 }
+function mancheteHtml(mt) {
+  if (!mt) return "";
+  let corpo = "";
+  if (mt.linhas) {
+    corpo = tabelaHtml(mt.linhas, mt.usuario, true) + (mt.classificam ? `<p class="minus" style="margin-top:6px">Avançam ${mt.classificam} por ${mt.titulo === "Tabela" ? "esta fase" : "grupo"}</p>` : "");
+  } else if (mt.confrontos) {
+    const placar = (c) => c.jogos.map((j) => `${esc(j.casa.sigla)} ${j.gc ?? ""} x ${j.gf ?? ""} ${esc(j.fora.sigla)}${j.pc !== null && j.pc !== undefined ? ` (pên. ${j.pc} x ${j.pf})` : ""}`).join(" · ");
+    corpo = mt.confrontos.map((c) => `<div class="chave ${c.meu ? "minha" : ""}"><div class="entre"><strong>${esc(c.a.nome)}</strong><span class="minus">x</span><strong style="text-align:right">${esc(c.b ? c.b.nome : "Folga")}</strong></div>
+      ${c.jogos.length ? `<p class="minus">${placar(c)}</p>` : ""}${c.vencedor ? `<span class="chip ok">Passou: ${esc(c.vencedor === c.a.id ? c.a.nome : c.b.nome)}</span>` : ""}</div>`).join("")
+      + (mt.outros ? `<p class="minus" style="margin-top:6px">E mais ${mt.outros} confrontos</p>` : "")
+      + (mt.caminho && mt.caminho.length ? `<p class="minus" style="margin-top:6px">Caminho até o título: ${mt.caminho.map(esc).join(" › ")}</p>` : "");
+  }
+  return `<div class="faixa-comp manchete cat-${mt.cat}"><div class="rotulo">${ROTULO_CAT[mt.cat] || ""} · ${esc(mt.titulo || mt.fase)}</div>
+    <div class="titulo-comp">${esc(mt.nome)}</div><p class="minus">${esc(mt.fase)}</p>
+    <div class="cartao" style="margin-bottom:0">${corpo}</div>
+    <button class="btn sec peq" data-abrir-comp="${esc(mt.comp)}" style="margin-top:8px">Abrir a competição</button></div>`;
+}
 function telaPainel() {
   const e = S.estado;
+  temaCompeticao(e.manchete ? e.manchete.cat : null);
   const dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
   const al = e.alertas || {};
   app.innerHTML = `
@@ -532,6 +557,7 @@ function telaPainel() {
       <div style="text-align:right"><div class="num" style="font-size:22px">${esc(e.data)}</div><div class="minus">${dias[e.dia_semana]}</div></div></div>
     <h3>Próximo jogo</h3>
     ${cartaoJogo(e.proximo, true)}
+    ${mancheteHtml(e.manchete)}
     <button class="btn" id="avancar" style="width:100%">${e.proximo ? "Ir para o jogo ao vivo" : "Avançar"}</button>
     <div class="grade2" style="margin-top:8px"><button class="btn sec" id="simular">${e.proximo ? "Simular o jogo" : "Avançar rápido"}</button><button class="btn sec" id="dia">Avançar um dia</button></div>
     ${e.propostas ? `<button class="cartao destaque item" id="props" style="margin-top:12px"><div class="cresce"><strong>${e.propostas} proposta${e.propostas > 1 ? "s" : ""} esperando resposta</strong><div class="minus">Mercado, Propostas</div></div>${chip("Ver", "al")}</button>` : ""}
@@ -544,7 +570,7 @@ function telaPainel() {
       return itens.length ? `<button class="cartao destaque item" id="irportal" style="margin-top:12px"><div class="cresce"><strong>Portal do treinador</strong><div class="minus">${itens.map(esc).join(" · ")}</div></div>${chip("Abrir", "al")}</button>` : ""; })()}
     ${al.contratos ? `<div class="cartao"><strong>${al.contratos} contrato${al.contratos > 1 ? "s" : ""} terminando em 31/12</strong><p class="minus">Sem renovação, o jogador sai no fim do ano. Elenco, toque no jogador, Renovar.</p></div>` : ""}
     ${(al.lesionados || []).length ? `<p class="minus" style="margin-top:6px">No departamento médico: ${esc(al.lesionados.join(", "))}</p>` : ""}
-    ${e.tabela && e.tabela.length ? `<h3>${esc(e.clube.liga)}</h3><div class="cartao">${tabelaHtml(e.tabela, e.clube.id, true)}
+    ${e.tabela && e.tabela.length && !(e.manchete && e.manchete.comp === e.liga_id) ? `<h3>${esc(e.clube.liga)}</h3><div class="cartao">${tabelaHtml(e.tabela, e.clube.id, true)}
       <button class="btn sec peq" id="tab" style="margin-top:8px">Tabela completa</button></div>` : ""}
     <div class="grade2" style="margin-top:4px">
       <div class="cartao"><p class="minus">Torcida</p><div class="entre"><strong>${esc(e.torcida.rotulo)}</strong><span class="num" style="font-size:22px">${e.torcida.valor}</span></div><div class="barra"><i style="width:${e.torcida.valor}%"></i></div></div>
@@ -559,6 +585,7 @@ function telaPainel() {
     <h3>Central de notícias</h3>
     <div class="cartao lista">${e.noticias.length ? e.noticias.map(itemNoticia).join("") : `<div class="vazio">Sem notícias ainda.</div>`}</div>`;
   const $ = (id) => document.getElementById(id);
+  app.querySelectorAll("[data-abrir-comp]").forEach((b) => b.onclick = () => { S.compAberta = b.dataset.abrirComp; ir("jogos"); });
   $("avancar").onclick = () => avancar("jogo", true);
   $("simular").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
@@ -613,7 +640,8 @@ function telaPartida() {
   const j = p.jogo;
   const r = p.relatorio;
   app.innerHTML = `
-    <div class="cartao destaque" style="text-align:center">
+    <div class="cartao destaque ${j.cat ? "cat-" + j.cat : ""}" style="text-align:center">
+      ${j.cat ? `<span class="selo-cat">${ROTULO_CAT[j.cat]}</span>` : ""}
       <p class="minus">${esc(j.competicao)}${j.fase && j.fase !== "Pontos corridos" ? " · " + esc(j.fase) : ""} · ${esc(j.data)}</p>
       <div class="entre" style="margin-top:12px">
         <div style="flex:1">${escudo(j.casa.sigla, "g")}<p style="margin-top:6px;font-weight:600">${esc(j.casa.nome)}</p></div>
@@ -719,7 +747,8 @@ async function telaAoVivo() {
   try { v = await api("vivo_iniciar"); } catch (e) { aviso(e.message); ir("painel"); return; }
   VIVO.estado = v; VIVO.rodando = false; VIVO.velocidade = 1;
   app.innerHTML = `
-    <div class="cartao destaque vivo-topo" style="text-align:center">
+    <div class="cartao destaque vivo-topo ${v.cat ? "cat-" + v.cat : ""}" style="text-align:center">
+      ${v.cat ? `<span class="selo-cat">${ROTULO_CAT[v.cat]}</span>` : ""}
       <p class="minus">${esc(v.competicao)} · ao vivo</p>
       <div class="entre" style="margin-top:10px">
         <div style="flex:1">${escudo(v.casa.sigla, "g")}<p style="margin-top:6px;font-weight:600">${esc(v.casa.nome)}</p></div>
@@ -1108,18 +1137,19 @@ async function telaJogos() {
   carregando("Abrindo as tabelas");
   const comps = await api("competicoes");
   if (!S.compAberta && comps.minhas.length) S.compAberta = comps.minhas[0].id;
-  let html = `<h2>Competições</h2><div class="abas">${comps.minhas.map((c) => `<button class="aba ${c.id === S.compAberta ? "on" : ""}" data-c="${esc(c.id)}">${esc(c.nome)}</button>`).join("")}
+  let html = `<h2>Competições</h2><div class="abas">${comps.minhas.map((c) => `<button class="aba cat-${c.cat} ${c.id === S.compAberta ? "on" : ""}" data-c="${esc(c.id)}">${esc(c.nome)}</button>`).join("")}
     <button class="aba ${S.compAberta === "_outras" ? "on" : ""}" data-c="_outras">Outras</button><button class="aba ${S.compAberta === "_cal" ? "on" : ""}" data-c="_cal">Calendário</button></div><div id="corpo"></div>`;
   app.innerHTML = html;
   app.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => { S.compAberta = b.dataset.c; telaJogos(); });
   const corpo = document.getElementById("corpo");
+  if (S.compAberta === "_cal" || S.compAberta === "_outras") temaCompeticao(null);
   if (S.compAberta === "_cal") {
     const cal = await api("calendario");
     corpo.innerHTML = cal.map((j) => cartaoJogo(j)).join("") || `<div class="vazio">Sem jogos.</div>`;
     return;
   }
   if (S.compAberta === "_outras") {
-    corpo.innerHTML = comps.por_pais.map((p) => `<h3>${esc(p.pais)}</h3><div class="cartao lista">${p.competicoes.map((c) => `<button class="item" data-o="${esc(c.id)}"><div class="cresce"><div class="nome">${esc(c.nome)}</div><div class="minus">${c.encerrada ? "Campeão: " + esc(c.campeao) : esc(c.fase)}</div></div></button>`).join("")}</div>`).join("");
+    corpo.innerHTML = comps.por_pais.map((p) => `<h3>${esc(p.pais)}</h3><div class="cartao lista">${p.competicoes.map((c) => `<button class="item" data-o="${esc(c.id)}"><span class="cat-${c.cat}" style="flex:none;width:10px;height:10px;border-radius:50%;background:var(--cat)"></span><div class="cresce"><div class="nome">${esc(c.nome)}</div><div class="minus">${c.encerrada ? "Campeão: " + esc(c.campeao) : esc(c.fase)}</div></div></button>`).join("")}</div>`).join("");
     corpo.querySelectorAll("[data-o]").forEach((b) => b.onclick = () => { S.compAberta = b.dataset.o; desenharCompeticao(document.getElementById("corpo"), b.dataset.o); });
     return;
   }
@@ -1129,7 +1159,10 @@ async function desenharCompeticao(corpo, id, fase = null, rodada = null) {
   const t = await api("tabela", { comp: id, fase });
   const jogos = await api("jogos", { comp: id, fase: t.indice, rodada });
   const art = await api("artilharia", { comp: id });
+  temaCompeticao(t.cat);
+  corpo.className = "cat-" + t.cat;
   corpo.innerHTML = `
+    <div class="faixa-comp"><div class="rotulo">${ROTULO_CAT[t.cat] || ""}</div><div class="titulo-comp">${esc(t.nome)}</div></div>
     <div class="cartao"><strong>${esc(t.nome)}</strong>${t.campeao ? ` <span class="chip al">Campeão: ${esc(t.campeao.nome)}</span>` : ""}
       <div class="abas">${t.fases.map((x) => `<button class="aba ${x.indice === t.indice ? "on" : ""}" data-f="${x.indice}" ${x.estado === "aguardando" ? "disabled" : ""}>${esc(x.nome)}</button>`).join("")}</div>
       ${t.explicacao ? `<p class="minus" style="margin-top:8px">${esc(t.explicacao)}</p>` : ""}

@@ -68,6 +68,36 @@ p{line-height:1.45}
 .abas::-webkit-scrollbar{display:none}
 .aba{padding:8px 12px;border-radius:999px;border:1px solid var(--linha);font-size:14px;white-space:nowrap;color:var(--giz2)}
 .aba.on{background:var(--giz);color:#0b1f14;font-weight:700}
+/* Cores por tipo de competição */
+.cat-nacional{--cat:#4fd17c;--cat2:rgba(79,209,124,.18);--cat3:rgba(79,209,124,.30)}
+.cat-copa{--cat:#ffc845;--cat2:rgba(255,200,69,.18);--cat3:rgba(255,200,69,.32)}
+.cat-internacional{--cat:#7d95ff;--cat2:rgba(125,149,255,.20);--cat3:rgba(125,149,255,.34)}
+body{transition:background-color .5s}
+body.cat-nacional,body.cat-copa,body.cat-internacional{
+  background-image:radial-gradient(ellipse 120% 60% at 50% -10%, var(--cat3), transparent 62%),
+    repeating-linear-gradient(180deg, var(--gramado) 0 46px, var(--gramado2) 46px 92px)}
+.cartao[class*="cat-"]{border-left:4px solid var(--cat)}
+.cartao.destaque[class*="cat-"]{border-color:var(--cat);box-shadow:0 0 0 1px var(--cat2),0 10px 40px rgba(0,0,0,.35)}
+.aba[class*="cat-"]{border-color:var(--cat2)}
+.aba[class*="cat-"]::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--cat);margin-right:6px;vertical-align:1px}
+.aba.on[class*="cat-"]{background:var(--cat);color:#0a140e;border-color:var(--cat)}
+.aba.on[class*="cat-"]::before{background:#0a140e}
+#corpo[class*="cat-"] .aba.on{background:var(--cat);color:#0a140e;border-color:var(--cat)}
+#corpo[class*="cat-"] h3{color:var(--cat)}
+.faixa-comp{border-radius:var(--raio);padding:12px 14px;margin:10px 0;border:1px solid var(--cat);
+  background:linear-gradient(120deg,var(--cat3),var(--cat2) 45%,transparent 85%);animation:faixaEntra .4s ease both}
+.faixa-comp .rotulo{font-family:var(--titulo);text-transform:uppercase;letter-spacing:.1em;font-size:13px;color:var(--cat);font-weight:800}
+.faixa-comp .titulo-comp{font-family:var(--titulo);text-transform:uppercase;font-size:24px;line-height:1.05;font-weight:800;margin-top:2px}
+.selo-cat{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cat)}
+body[class*="cat-"] nav#menu{background:linear-gradient(180deg,var(--cat2),rgba(5,14,9,.96) 70%);border-top:2px solid var(--cat);transition:background .4s,border-color .4s}
+body[class*="cat-"] nav#menu button.on{color:var(--cat)}
+body[class*="cat-"] nav#menu button.on svg{filter:drop-shadow(0 0 6px var(--cat3))}
+body[class*="cat-"] .btn:not(.sec){background:var(--cat);color:#0a140e}
+body[class*="cat-"] h2{color:var(--giz)}
+.chave{padding:8px 0;border-top:1px solid var(--linha)}
+.chave:first-child{border-top:0}
+.chave.minha{background:var(--cat2);margin:0 -8px;padding:8px;border-radius:10px;border-top:0}
+@keyframes faixaEntra{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .lista>*{border-top:1px solid var(--linha)}
 .lista>*:first-child{border-top:0}
 .item{display:flex;align-items:center;gap:10px;padding:11px 2px;width:100%;text-align:left}
