@@ -1076,9 +1076,15 @@ async function telaCampo() {
   }
   desenharCampo();
 }
+function sanearEscalacao(E, porId) {
+  const vistos = new Set();
+  E.vagas = E.vagas.map((id) => (id && porId[id] && !vistos.has(id) ? (vistos.add(id), id) : null));
+  E.banco = E.banco.filter((id) => id && porId[id] && !vistos.has(id) && (vistos.add(id), true)).slice(0, 7);
+}
 function desenharCampo() {
   const E = S.esc, d = E.dados;
   const porId = Object.fromEntries(d.jogadores.map((x) => [x.id, x]));
+  sanearEscalacao(E, porId);
   const usados = new Set([...E.vagas, ...E.banco]);
   const fora = d.jogadores.filter((x) => !usados.has(x.id));
   const sel = E.sel;
@@ -1123,9 +1129,13 @@ function desenharCampo() {
     if (!E.sel) { E.sel = alvo; desenharCampo(); return; }
     const a = E.sel; E.sel = null;
     const valor = (s) => s.tipo === "vaga" ? E.vagas[s.chave] : s.chave;
+    // posição fixa de cada lado antes de mexer: trocar dois reservas não pode duplicar nem sumir com ninguém
+    const lugar = (s) => s.tipo === "vaga" ? ["vaga", s.chave] : s.tipo === "banco" ? ["banco", E.banco.indexOf(s.chave)] : ["fora", -1];
+    const la = lugar(a), lb = lugar(alvo);
     const por = (s, novo) => {
-      if (s.tipo === "vaga") E.vagas[s.chave] = novo;
-      else if (s.tipo === "banco") E.banco = E.banco.map((x) => (x === s.chave ? novo : x));
+      const [tipo, i] = s === a ? la : lb;
+      if (tipo === "vaga") E.vagas[i] = novo;
+      else if (tipo === "banco" && i >= 0) E.banco[i] = novo;
     };
     if (a.tipo === "vazio" || alvo.tipo === "vazio") {
       const outro = a.tipo === "vazio" ? alvo : a;
@@ -1229,7 +1239,26 @@ async function abrirJogador(id, meu) {
   const acoes = f.querySelector("#acoes");
   const obs = f.querySelector("#observar");
   if (obs) obs.onclick = async () => { const r = await api("observar", { jogador: j.id }); aviso(r.texto || r.erro); if (r.ok) abrirJogador(id, meu); };
-  if (meu) {
+  if (meu && j.emprestimo_recebido) {
+    const e = j.emprestimo_recebido;
+    acoes.innerHTML = `<div class="cartao"><div class="entre"><span class="sub">Emprestado pelo</span><strong>${esc(e.dono)}</strong></div>
+      <div class="entre"><span class="sub">Empréstimo até</span><strong>${esc(e.ate)}</strong></div>
+      ${e.opcao ? `<div class="entre"><span class="sub">${e.obrigacao ? "Obrigação de compra" : "Opção de compra"}</span><strong>${esc(e.opcao)}</strong></div>` : ""}
+      <p class="minus" style="margin-top:6px">Ele não é do seu clube: não pode ser vendido, emprestado nem ter o contrato renovado. ${e.janela ? "" : "Encerrar o empréstimo ou comprar só com a janela de transferências aberta."}</p></div>
+      <button class="btn sec" data-e="manter">Manter no clube</button>
+      <button class="btn sec" data-e="encerrar" ${e.janela ? "" : "disabled"}>Encerrar empréstimo · multa ${esc(e.multa)}</button>
+      ${e.opcao ? `<button class="btn" data-e="comprar" ${e.janela ? "" : "disabled"}>Exercer opção de compra · ${esc(e.opcao)}</button>` : ""}`;
+    let confirma = "";
+    acoes.querySelectorAll("[data-e]").forEach((b) => b.onclick = async () => {
+      const a = b.dataset.e;
+      if (a === "manter") { fecharFolha(); return; }
+      if (confirma !== a) { confirma = a; b.textContent = "Toque de novo para confirmar"; return; }
+      try {
+        const r = await api(a === "encerrar" ? "encerrar_emprestimo" : "opcao_de_compra", { jogador: j.id });
+        aviso(r.texto); fecharFolha(); S.estado = await api("estado"); telaElenco();
+      } catch (erro) { aviso(erro.message); confirma = ""; }
+    });
+  } else if (meu) {
     const listado = j.listado;
     acoes.innerHTML = `
       <div class="grade2"><button class="btn sec" data-a="venda">${listado === "venda" ? "Tirar da venda" : "Oferecer para venda"}</button>
