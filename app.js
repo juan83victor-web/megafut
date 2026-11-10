@@ -131,7 +131,7 @@ async function idbGravar(chave, valor) {
   } catch (e) { return false; }
 }
 if (EH_APP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-const VERSAO_APP = "459f14a9fa16";
+const VERSAO_APP = "e3c1ff79b5eb";
 if (EH_APP && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const tinhaControle = Boolean(navigator.serviceWorker.controller);
   let recarregou = false;
@@ -562,6 +562,7 @@ function telaPainel() {
     ${mancheteHtml(e.manchete)}
     <button class="btn" id="avancar" style="width:100%">${e.proximo ? "Ir para o jogo ao vivo" : "Avançar"}</button>
     <div class="grade2" style="margin-top:8px"><button class="btn sec" id="simular">${e.proximo ? "Simular o jogo" : "Avançar rápido"}</button><button class="btn sec" id="dia">Avançar um dia</button></div>
+    ${e.bicho ? `<button class="cartao destaque item" id="bicho" style="margin-top:12px"><div class="cresce"><strong>O elenco pediu bicho</strong><div class="minus">${esc(e.bicho.rival)} · ${esc(e.bicho.comp)} · ${esc(e.bicho.motivo)}</div></div>${chip("Responder", "al")}</button>` : ""}
     ${e.propostas ? `<button class="cartao destaque item" id="props" style="margin-top:12px"><div class="cresce"><strong>${e.propostas} proposta${e.propostas > 1 ? "s" : ""} esperando resposta</strong><div class="minus">Mercado, Propostas</div></div>${chip("Ver", "al")}</button>` : ""}
     ${(() => { const pt = e.portal || {}; const itens = [];
       if (pt.desempregado) itens.push("Você está sem clube: escolha uma proposta");
@@ -599,6 +600,7 @@ function telaPainel() {
   $("simular").onclick = () => avancar("jogo");
   $("dia").onclick = () => avancar("dia");
   if ($("irportal")) $("irportal").onclick = () => ir("portal");
+  if ($("bicho")) $("bicho").onclick = () => abrirBicho(e.bicho);
   if ($("props")) $("props").onclick = () => { S.abaMercado = "propostas"; ir("mercado"); };
   if ($("tab")) $("tab").onclick = () => { S.compAberta = e.liga_id; ir("jogos"); };
 }
@@ -692,8 +694,28 @@ async function passagemDosDias(de, ate, ag) {
   ov.remove();
 }
 
+function abrirBicho(b, depois) {
+  const f = folha(`<h2>Bicho para o jogo</h2><p class="sub">${esc(b.texto)}</p>
+    <p class="minus" style="margin:6px 0 10px">O valor só sai do caixa se o time ${b.condicao === "pela vitória" ? "vencer" : b.condicao === "pelo título" ? "for campeão" : "se classificar"}. Caixa agora: ${esc(b.caixa)} · folha mensal: ${esc(b.folha)}.</p>
+    ${b.opcoes.map((o) => `<button class="cartao item" data-bicho="${o.i}" style="width:100%;text-align:left;display:block;margin-bottom:8px">
+      <div class="entre"><strong>${esc(o.rotulo)}</strong><strong style="color:#9be8b4">${esc(o.valor_txt)}</strong></div>
+      <div class="minus">Moral do elenco ${o.moral > 0 ? "+" + o.moral : o.moral} · ${esc(o.reacao)}</div></button>`).join("")}
+    <p class="minus">Sem resposta, o elenco entende como recusa e entra chateado (moral menos 3).</p>`);
+  f.querySelectorAll("[data-bicho]").forEach((bt) => bt.onclick = async () => {
+    try {
+      const r = await api("bicho", { opcao: +bt.dataset.bicho });
+      fecharFolha(); aviso(r.texto || r.erro);
+      S.estado = await api("estado");
+      if (depois) depois(); else ir("painel");
+    } catch (err) { aviso(err.message); }
+  });
+}
 async function avancar(modo, aoVivo = false) {
   const e0 = S.estado || {};
+  if (e0.bicho && (modo !== "dia" || e0.bicho.data === e0.data)) {
+    abrirBicho(e0.bicho, () => avancar(modo, aoVivo));
+    return;
+  }
   const de = e0.data ? dataBr(e0.data) : null;
   const ate = !de ? null : modo === "dia" ? maisDias(de, 1) : e0.proximo ? dataBr(e0.proximo.data) : null;
   carregando(modo === "dia" ? "Um dia no mundo do futebol" : "Rodando o mundo até o seu jogo");
@@ -1510,7 +1532,7 @@ async function responderProposta(id, acao, p) {
 // ---------------------------------------------------------------------------
 // Portal do treinador
 // ---------------------------------------------------------------------------
-const COR_SETOR = { dm: "ruim", diretoria: "al", imprensa: "", patrocinio: "ok", base: "ok", financeiro: "al", carreira: "ok" };
+const COR_SETOR = { dm: "ruim", diretoria: "al", imprensa: "", patrocinio: "ok", base: "ok", financeiro: "al", carreira: "ok", vestiario: "al" };
 async function telaPortal() {
   carregando("Abrindo o portal");
   const p = await api("portal");
@@ -1540,11 +1562,17 @@ async function telaPortal() {
     ${p.metas.length ? `<h3>Metas da temporada</h3><div class="cartao lista">${p.metas.map((m) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(m.comp)}</strong>${chip(m.status, m.status === "batida" ? "ok" : m.status === "não cumprida" ? "ruim" : "")}</div>
       <div class="minus">${esc(m.texto)} · bônus da diretoria ${esc(m.bonus)}${m.posicao ? " · terminou em " + m.posicao + "º" : ""}</div></div>`).join("")}</div>` : ""}
     <h3>Patrocinadores</h3>
-    <div class="cartao lista">${p.patrocinadores.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(x.nome)}</strong><strong style="color:#9be8b4">${esc(x.anual)}/ano</strong></div><div class="minus">até ${x.ate} · ${esc(x.bonus)} por meta batida</div></div>`).join("") || `<div class="vazio">Nenhum patrocinador assinado.</div>`}</div>
-    ${p.ofertas_patrocinio.length ? `<p class="sub" style="margin:8px 0">Escolha até ${3 - p.patrocinadores.length} das ofertas:</p><div class="cartao lista">${p.ofertas_patrocinio.map((o) => `<div class="item" style="display:block">
-      <div class="entre"><strong>${esc(o.nome)}</strong><strong>${esc(o.anual)}/ano</strong></div>
-      <div class="minus">${o.temporadas} temporada${o.temporadas > 1 ? "s" : ""} (até ${o.ate}) · bônus de ${esc(o.bonus)} por meta batida</div>
+    ${(() => { const r = p.patrocinio_resumo; return r ? `<div class="cartao"><div class="entre"><span class="sub">Patrocínio no ano</span><strong style="color:#9be8b4">${esc(r.anual)} (${String(r.pct).replace(".", ",")}% da receita)</strong></div>
+      <div class="entre"><span class="sub">Cota comercial que fica vazia sem patrocínio</span><strong>${esc(r.lacuna)}</strong></div>
+      <div class="entre"><span class="sub">Ganho real sobre essa cota</span><strong style="color:${r.saldo_num >= 0 ? "var(--verde)" : "var(--vermelho)"}">${r.saldo_num >= 0 ? "" : "faltam "}${esc(r.saldo.replace("negativo, ", ""))}</strong></div>
+      <div class="entre"><span class="sub">Manutenção da estrutura no ano</span><strong>${esc(r.manutencao)}</strong></div>
+      <p class="minus" style="margin-top:6px">${esc(r.regra)}</p></div>` : ""; })()}
+    <div class="cartao lista">${p.patrocinadores.map((x) => `<div class="item" style="display:block"><div class="entre"><strong>${x.cota ? chip(x.cota, "ok") + " " : ""}${esc(x.nome)}</strong><strong style="color:#9be8b4">${esc(x.anual)}/ano</strong></div><div class="minus">até ${x.ate} · ${String(x.pct).replace(".", ",")}% da receita · ${esc(x.bonus)} por meta batida</div></div>`).join("") || `<div class="vazio">Nenhum patrocinador assinado.</div>`}</div>
+    ${p.ofertas_patrocinio.length ? `<p class="sub" style="margin:8px 0">Escolha uma oferta para cada cota livre:</p><div class="cartao lista">${p.ofertas_patrocinio.map((o) => `<div class="item" style="display:block">
+      <div class="entre"><strong>${o.cota ? chip(o.cota, "al") + " " : ""}${esc(o.nome)}</strong><strong>${esc(o.anual)}/ano</strong></div>
+      <div class="minus">${String(o.pct).replace(".", ",")}% da receita · ${o.temporadas} temporada${o.temporadas > 1 ? "s" : ""} (até ${o.ate}) · bônus de ${esc(o.bonus)} por meta batida</div>
       <button class="btn peq" data-patro="${o.id}" style="margin-top:8px">Assinar</button></div>`).join("")}</div>` : ""}
+    ${(p.bichos || []).length ? `<h3>Bichos acertados</h3><div class="cartao lista">${p.bichos.map((b) => `<div class="item" style="display:block"><div class="entre"><strong>${esc(b.rival)}</strong>${chip(b.pago ? "pago" : b.valor ? "não veio" : "sem resposta", b.pago ? "ok" : "")}</div><div class="minus">${esc(b.data)} · ${esc(b.comp)} · ${esc(b.rotulo)}${b.valor ? " · R$ " + Math.round(b.valor / 1000) + " mil" : ""}</div></div>`).join("")}</div>` : ""}
     <h3>Carreira</h3>
     <div class="cartao"><div class="entre"><span class="sub">Jogos</span><strong>${p.total.j}</strong></div>
       <div class="entre"><span class="sub">Vitórias, empates e derrotas</span><strong>${p.total.v}, ${p.total.e}, ${p.total.d}</strong></div>
@@ -1633,6 +1661,9 @@ async function desenharGestao() {
   const p = g.peneira;
   const fp = g.fpf;
   alvo.innerHTML = `
+    ${(g.resumo || []).map((r) => `<h3>Dinheiro em ${esc(r.ano)}</h3><div class="cartao">${r.linhas.map((l) => `<div class="entre"><span class="sub">${esc(l.nome)}</span><strong style="color:${l.entrada ? "#9be8b4" : "#ff9d9d"}">${l.entrada ? "+ " : "menos "}${esc(l.valor)}</strong></div>`).join("")}
+      <div class="entre" style="margin-top:6px;border-top:1px solid rgba(255,255,255,.12);padding-top:6px"><strong>Resultado</strong><strong style="color:${r.positivo ? "var(--verde)" : "var(--vermelho)"}">${r.positivo ? "+ " : "menos "}${esc(r.total)}</strong></div></div>`).join("")}
+    ${(g.resumo || []).length ? `<p class="minus">Vendas e compras de jogadores entram no extrato e no resumo a partir desta versão.</p>` : ""}
     <h3>Fair Play Financeiro</h3>
     <div class="cartao">${fp.sancao ? `<p class="chip ruim">Sob sanção nesta temporada</p>` : ""}
       <div class="entre"><span class="sub">Resultado da temporada até agora</span><strong style="color:${fp.resultado_ano_num < 0 ? "var(--vermelho)" : "var(--verde)"}">${esc(fp.resultado_ano)}</strong></div>
