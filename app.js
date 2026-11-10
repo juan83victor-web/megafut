@@ -398,6 +398,7 @@ function ligasDoPais(nome) {
   return ligas;
 }
 async function telaEscolha() {
+  if (S.ultra === undefined) S.ultra = local("megafut_ultra") === "1";
   if (!S.paises) { carregando("Abrindo o mapa das Américas"); S.paises = await api("paises"); }
   if (!MAPA) { try { MAPA = await (await fetch("./mapa_americas.json")).json(); } catch (e) { MAPA = { w: 360, h: 600, paises: [] }; } }
   const pais = S.paisMapa;
@@ -414,6 +415,9 @@ async function telaEscolha() {
         : `<path class="ctx" d="${p.d}"></path>`).join("")}
     </svg>
     <p class="minus" style="text-align:center">Toque no país. Verde: já tem clube jogável.</p>
+    <label class="cartao ultra" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+      <input type="checkbox" id="ultra" ${S.ultra ? "checked" : ""} style="width:22px;height:22px;margin-top:2px;accent-color:var(--cat,#4fd17c)">
+      <span><strong>Modo ultra realista (só treinador)</strong><br><span class="minus">Quem negocia é a diretoria. Você define com quem conta e quem pode sair, pede reforço por posição e escolhe entre os nomes que ela traz. A torcida cobra jogadores e pode derrubar a diretoria.</span></span></label>
     <div class="abas">${nomesComClube.map((n) => `<button class="aba ${n === pais ? "on" : ""}" data-pais="${esc(n)}">${esc(n)}</button>`).join("")}</div>
     <div id="ligas">${pais ? `<h2>${esc(pais)}</h2>${ligas.map((l, i) => {
       const jog = l.clubes.filter((c) => c.jogavel).length;
@@ -421,6 +425,7 @@ async function telaEscolha() {
         <span class="minus" style="display:block">${l.clubes.length} clubes · ${jog} com elenco real</span></span>${jog ? chip("Jogável", "ok") : chip("Em pesquisa", "")}</button>`;
     }).join("")}` : `<div class="vazio">Escolha um país no mapa.</div>`}</div>`;
   document.getElementById("volta").onclick = () => ir("inicio");
+  document.getElementById("ultra").onchange = (ev) => { S.ultra = ev.target.checked; local("megafut_ultra", S.ultra ? "1" : ""); };
   const svg = app.querySelector("svg.mapa");
   const caixaDoPais = (nome) => {
     let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
@@ -504,7 +509,7 @@ async function abrirResumo(chave) {
   if (b) b.onclick = async () => {
     fecharFolha();
     carregando("Montando o mundo: todas as ligas, copas e mercados");
-    try { S.estado = await api("nova", { chave, tecnico: S.tecnico || "" }); local(SLOT.texto(S.slot || 1), null); salvarAgora(true); ir("painel"); }
+    try { S.estado = await api("nova", { chave, tecnico: S.tecnico || "", ultra: !!S.ultra }); local(SLOT.texto(S.slot || 1), null); salvarAgora(true); ir("painel"); }
     catch (e) { aviso(e.message); ir("escolha"); }
   };
 }
@@ -1188,6 +1193,10 @@ function linhaJogador(j) {
   if (j.listado) sinais.push(chip(j.listado === "venda" ? "À venda" : "Para empréstimo", "al"));
   if (j.emprestado_por) sinais.push(chip("Emprestado", ""));
   if (j.onze) sinais.push(chip("Titular", "ok"));
+  if (j.plano === "conto") sinais.push(chip("Conto com ele", "ok"));
+  if (j.plano === "fora") sinais.push(chip("Liberado para sair", "al"));
+  if (j.pede_saida) sinais.push(chip("Torcida pede saída", "ruim"));
+  if (j.ident >= 75) sinais.push(chip("Ídolo", "ok"));
   if (j.carga_tom === "alerta" || j.carga_tom === "ruim") sinais.push(chip(`${j.carga_txt}: ${j.carga} jogos em 14 dias`, j.carga_tom === "ruim" ? "ruim" : "al"));
   const dm = j.lesao_info ? `<div class="dm">DM: ${esc(j.lesao_info.diagnostico)} · volta ${esc(j.lesao_info.volta)} · ${j.lesao_info.jogos ? "perde " + plural(j.lesao_info.jogos, "jogo", "jogos") : "sem jogos no período"}</div>` : "";
   return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
@@ -1239,7 +1248,20 @@ async function abrirJogador(id, meu) {
   const acoes = f.querySelector("#acoes");
   const obs = f.querySelector("#observar");
   if (obs) obs.onclick = async () => { const r = await api("observar", { jogador: j.id }); aviso(r.texto || r.erro); if (r.ok) abrirJogador(id, meu); };
-  if (meu && j.emprestimo_recebido) {
+  if (meu && j.ultra) {
+    const planos = [["conto", "Conto com ele", "Ele terá minutos durante o ano"], ["", "Sem definição", "A diretoria decide sozinha"], ["fora", "Pode sair", "A diretoria pode vender ou emprestar"]];
+    acoes.innerHTML = `<div class="cartao"><div class="entre"><span class="sub">Identificação com a torcida</span><strong>${esc(j.ident_txt)} (${j.ident})</strong></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${j.ident}%"></i></div>
+      <div class="entre"><span class="sub">Momento</span><strong>${esc(j.fase)}</strong></div>
+      ${j.pede_saida ? `<p class="chip ruim" style="margin-top:6px">A torcida pede a saída dele</p>` : ""}
+      <p class="minus" style="margin-top:6px">A identificação é medida pelo jogo (anos e jogos pelo clube, capitania, títulos e ídolos informados). Ídolo é muito difícil de vender.${j.emprestimo_recebido ? " Ele é emprestado: a diretoria não pode vendê-lo." : ""}</p></div>
+      <h3>Seus planos para ele</h3>
+      ${planos.map(([v, t, d]) => `<button class="btn ${j.plano === v ? "" : "sec"}" data-plano="${v}">${t}<br><span class="minus">${d}</span></button>`).join("")}`;
+    acoes.querySelectorAll("[data-plano]").forEach((b) => b.onclick = async () => {
+      try { const r = await api("plano", { jogador: j.id, plano: b.dataset.plano }); aviso(r.texto); abrirJogador(id, meu); }
+      catch (e) { aviso(e.message); }
+    });
+  } else if (meu && j.emprestimo_recebido) {
     const e = j.emprestimo_recebido;
     acoes.innerHTML = `<div class="cartao"><div class="entre"><span class="sub">Emprestado pelo</span><strong>${esc(e.dono)}</strong></div>
       <div class="entre"><span class="sub">Empréstimo até</span><strong>${esc(e.ate)}</strong></div>
@@ -1351,7 +1373,51 @@ async function desenharCompeticao(corpo, id, fase = null, rodada = null) {
 // ---------------------------------------------------------------------------
 // Mercado
 // ---------------------------------------------------------------------------
+async function telaDiretoria() {
+  const d = await api("diretoria");
+  S.pedirPos = S.pedirPos || [];
+  const cartaoSug = (p, x) => `<div class="cartao"><div class="entre"><div><strong>${esc(x.nome)}</strong><div class="minus">${esc(x.rotulo || x.pos)} · ${esc(x.idade)} anos · ${esc(x.nac || "")}</div></div><span class="nivel ${corOvr(ovr(x))}">${ovr(x)}</span></div>
+      <div class="entre"><span class="sub">Onde joga</span><strong>${esc(x.clube_nome)}${x.liga ? " · " + esc(x.liga) : ""}</strong></div>
+      <div class="entre"><span class="sub">Temporada</span><strong>${plural(x.jogos, "jogo", "jogos")} · ${plural(x.gols, "gol", "gols")} · ${plural(x.assist, "assistência", "assistências")}${x.nota ? " · nota " + String(x.nota).replace(".", ",") : ""}</strong></div>
+      <div class="entre"><span class="sub">Potencial</span><strong>${esc(x.pot_txt || "")}</strong></div>
+      <div class="entre"><span class="sub">Valor estimado</span><strong>${esc(x.valor_txt)}</strong></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sec peq" data-ver="${x.id}">Ver ficha</button><button class="btn peq" data-quero="${p.id}:${x.id}">Quero contar com ele</button></div></div>`;
+  const ESTADO = { buscando: ["Procurando", "al"], pronto: ["Nomes chegaram", "ok"], negociando: ["Negociando", "al"], concluido: ["Contratado", "ok"], falhou: ["Não deu certo", "ruim"], sem_nomes: ["Sem nomes viáveis", "ruim"], cancelado: ["Cancelado", ""] };
+  app.innerHTML = `<h2>Diretoria</h2>
+    <div class="cartao"><div class="entre"><span class="sub">Aprovação da torcida à diretoria</span><strong>${d.aprovacao}</strong></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${d.aprovacao}%;${d.aprovacao < 35 ? "background:var(--vermelho)" : ""}"></i></div>
+      <p class="minus">${d.gestao > 1 ? `Esta é a ${d.gestao}ª diretoria desde a sua chegada. ` : ""}Abaixo de 25 a torcida derruba a diretoria, e você continua no cargo.</p>
+      <p class="minus" style="margin-top:6px">${esc(d.regra)}</p></div>
+    ${d.liberados.length ? `<div class="cartao"><strong>Reforço liberado</strong><p class="minus">A diretoria negociou alguém nestas posições: ${d.liberados.map((l) => esc(l.rotulo)).join(", ")}. Peça reforço abaixo.</p></div>` : ""}
+    <h3>Pedir reforço</h3>
+    <div class="abas" style="flex-wrap:wrap">${d.posicoes.map((p) => `<button class="aba ${S.pedirPos.includes(p.chave) ? "on" : ""}" data-pp="${p.chave}">${esc(p.rotulo)}</button>`).join("")}</div>
+    <button class="btn" id="pedir" ${S.pedirPos.length ? "" : "disabled"}>Pedir à diretoria (${S.pedirPos.length})</button>
+    <p class="minus">A diretoria leva de 3 a 6 dias e traz até 4 nomes por posição. ${d.janela ? "" : "A janela está fechada: ela pode buscar, mas só fecha quando abrir (sem clube pode assinar a qualquer hora)."}</p>
+    <h3>Pedidos</h3>
+    ${d.pedidos.length ? d.pedidos.map((p) => `<div class="cartao"><div class="entre"><strong>${esc(p.rotulo)}</strong>${chip(ESTADO[p.estado] ? ESTADO[p.estado][0] : p.estado, ESTADO[p.estado] ? ESTADO[p.estado][1] : "")}</div>
+      ${p.estado === "buscando" ? `<p class="minus">Previsão: ${esc(p.pronto_em)}</p>` : ""}
+      ${p.escolhido ? `<p class="minus">Escolhido: ${esc(p.escolhido)}</p>` : ""}${p.obs ? `<p class="minus">${esc(p.obs)}</p>` : ""}
+      ${["buscando", "pronto"].includes(p.estado) ? `<button class="btn sec peq" data-cancela="${p.id}" style="margin-top:6px">Cancelar pedido</button>` : ""}</div>
+      ${p.sugestoes.map((x) => cartaoSug(p, x)).join("")}`).join("") : `<div class="vazio">Nenhum pedido ainda.</div>`}
+    <h3>Seus planos</h3>
+    <div class="cartao"><p><strong>Conto com:</strong> ${d.planos.conto.map((x) => esc(x.nome)).join(", ") || "ninguém marcado"}</p>
+      <p style="margin-top:6px"><strong>Podem sair:</strong> ${d.planos.fora.map((x) => esc(x.nome)).join(", ") || "ninguém marcado"}</p>
+      ${d.pede_saida.length ? `<p style="margin-top:6px"><strong>Torcida pede saída:</strong> ${d.pede_saida.map(esc).join(", ")}</p>` : ""}
+      <p class="minus" style="margin-top:6px">Marque na ficha de cada jogador, no Elenco.</p></div>
+    <h3>Decisões da diretoria</h3>
+    <div class="cartao lista">${d.decisoes.length ? d.decisoes.map(([dt, t]) => `<div class="item"><div class="cresce"><div class="minus">${esc(dt)}</div><div>${esc(t)}</div></div></div>`).join("") : `<p class="minus">Nada ainda.</p>`}</div>`;
+  app.querySelectorAll("[data-pp]").forEach((b) => b.onclick = () => { const k = b.dataset.pp; S.pedirPos = S.pedirPos.includes(k) ? S.pedirPos.filter((x) => x !== k) : [...S.pedirPos, k]; telaDiretoria(); });
+  document.getElementById("pedir").onclick = async () => { try { const r = await api("diretoria_pedir", { posicoes: S.pedirPos }); S.pedirPos = []; aviso(r.texto); telaDiretoria(); } catch (e) { aviso(e.message); } };
+  app.querySelectorAll("[data-cancela]").forEach((b) => b.onclick = async () => { try { aviso((await api("diretoria_cancelar", { pedido: +b.dataset.cancela })).texto); telaDiretoria(); } catch (e) { aviso(e.message); } });
+  app.querySelectorAll("[data-ver]").forEach((b) => b.onclick = () => abrirJogador(+b.dataset.ver, false));
+  app.querySelectorAll("[data-quero]").forEach((b) => b.onclick = async () => {
+    const [p, x] = b.dataset.quero.split(":").map(Number);
+    try { const r = await api("diretoria_escolher", { pedido: p, jogador: x }); aviso(r.texto); S.estado = await api("estado"); telaDiretoria(); } catch (e) { aviso(e.message); }
+  });
+}
+
 async function telaMercado() {
+  if (S.estado && S.estado.ultra) return telaDiretoria();
   const abas = { buscar: "Buscar", propostas: "Propostas", historico: "Transferências" };
   app.innerHTML = `<h2>Mercado</h2><div class="abas">${Object.entries(abas).map(([k, v]) => `<button class="aba ${S.abaMercado === k ? "on" : ""}" data-m="${k}">${v}</button>`).join("")}</div><div id="corpo"></div>`;
   app.querySelectorAll("[data-m]").forEach((b) => b.onclick = () => { S.abaMercado = b.dataset.m; telaMercado(); });
