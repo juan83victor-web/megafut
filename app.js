@@ -702,9 +702,9 @@ async function passagemDosDias(de, ate, ag) {
 function abrirBicho(b, depois) {
   const f = folha(`<h2>Bicho para o jogo</h2><p class="sub">${esc(b.texto)}</p>
     <p class="minus" style="margin:6px 0 10px">O valor só sai do caixa se o time ${b.condicao === "pela vitória" ? "vencer" : b.condicao === "pelo título" ? "for campeão" : "se classificar"}. Caixa agora: ${esc(b.caixa)} · folha mensal: ${esc(b.folha)}.</p>
-    ${b.opcoes.map((o) => `<button class="cartao item" data-bicho="${o.i}" style="width:100%;text-align:left;display:block;margin-bottom:8px">
+    ${b.opcoes.map((o) => `<button class="cartao item" data-bicho="${o.i}" ${o.disponivel === false ? "disabled" : ""} style="width:100%;text-align:left;display:block;margin-bottom:8px;${o.disponivel === false ? "opacity:.45" : ""}">
       <div class="entre"><strong>${esc(o.rotulo)}</strong><strong style="color:#9be8b4">${esc(o.valor_txt)}</strong></div>
-      <div class="minus">Moral do elenco ${o.moral > 0 ? "+" + o.moral : o.moral} · ${esc(o.reacao)}</div></button>`).join("")}
+      <div class="minus">Moral do elenco ${o.moral > 0 ? "+" + o.moral : o.moral} · ${esc(o.reacao)}${o.disponivel === false ? " · sem dinheiro em caixa" : ""}</div></button>`).join("")}
     <p class="minus">Sem resposta, o elenco entende como recusa e entra chateado (moral menos 3).</p>`);
   f.querySelectorAll("[data-bicho]").forEach((bt) => bt.onclick = async () => {
     try {
@@ -1381,7 +1381,8 @@ async function telaDiretoria() {
       <div class="entre"><span class="sub">Temporada</span><strong>${plural(x.jogos, "jogo", "jogos")} · ${plural(x.gols, "gol", "gols")} · ${plural(x.assist, "assistência", "assistências")}${x.nota ? " · nota " + String(x.nota).replace(".", ",") : ""}</strong></div>
       <div class="entre"><span class="sub">Potencial</span><strong>${esc(x.pot_txt || "")}</strong></div>
       <div class="entre"><span class="sub">Valor estimado</span><strong>${esc(x.valor_txt)}</strong></div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sec peq" data-ver="${x.id}">Ver ficha</button><button class="btn peq" data-quero="${p.id}:${x.id}">Quero contar com ele</button></div></div>`;
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sec peq" data-ver="${x.id}">Ver ficha</button>
+      ${x.neg === "negociando" ? chip("Diretoria negociando", "al") : x.neg === "concluido" ? chip("Contratado", "ok") : x.neg === "falhou" ? `<span class="minus">${esc(x.neg_obs || "Sem acordo")}</span>` : `<button class="btn peq" data-quero="${p.id}:${x.id}">Quero contar com ele</button>`}</div></div>`;
   const ESTADO = { buscando: ["Procurando", "al"], pronto: ["Nomes chegaram", "ok"], negociando: ["Negociando", "al"], concluido: ["Contratado", "ok"], falhou: ["Não deu certo", "ruim"], sem_nomes: ["Sem nomes viáveis", "ruim"], cancelado: ["Cancelado", ""] };
   app.innerHTML = `<h2>Diretoria</h2>
     <div class="cartao"><div class="entre"><span class="sub">Aprovação da torcida à diretoria</span><strong>${d.aprovacao}</strong></div>
@@ -1395,10 +1396,10 @@ async function telaDiretoria() {
     <p class="minus">A diretoria leva de 3 a 6 dias e traz até 4 nomes por posição. ${d.janela ? "" : "A janela está fechada: ela pode buscar, mas só fecha quando abrir (sem clube pode assinar a qualquer hora)."}</p>
     <h3>Pedidos</h3>
     ${d.pedidos.length ? d.pedidos.map((p) => `<div class="cartao"><div class="entre"><strong>${esc(p.rotulo)}</strong>${chip(ESTADO[p.estado] ? ESTADO[p.estado][0] : p.estado, ESTADO[p.estado] ? ESTADO[p.estado][1] : "")}</div>
-      ${p.estado === "buscando" ? `<p class="minus">Previsão: ${esc(p.pronto_em)}</p>` : ""}
-      ${p.escolhido ? `<p class="minus">Escolhido: ${esc(p.escolhido)}</p>` : ""}${p.obs ? `<p class="minus">${esc(p.obs)}</p>` : ""}
-      ${["buscando", "pronto"].includes(p.estado) ? `<button class="btn sec peq" data-cancela="${p.id}" style="margin-top:6px">Cancelar pedido</button>` : ""}</div>
-      ${p.sugestoes.map((x) => cartaoSug(p, x)).join("")}`).join("") : `<div class="vazio">Nenhum pedido ainda.</div>`}
+      ${p.estado === "buscando" ? `<p class="minus">Previsão: ${esc(p.pronto_em)}</p>` : `<p class="minus">Pode escolher mais de um nome: a diretoria negocia todos ao mesmo tempo e para quando fechar com um.</p>`}
+      <button class="btn sec peq" data-cancela="${p.id}" style="margin-top:6px">Encerrar pedido</button></div>
+      ${p.sugestoes.map((x) => cartaoSug(p, x)).join("")}`).join("") : `<div class="vazio">Nenhum pedido em aberto.</div>`}
+    ${d.encerrados.length ? `<p class="minus" style="margin-top:8px">Encerrados: ${d.encerrados.map((x) => `${esc(x.rotulo)}, ${esc(x.resumo)}`).join(" · ")}</p>` : ""}
     <h3>Seus planos</h3>
     <div class="cartao"><p><strong>Conto com:</strong> ${d.planos.conto.map((x) => esc(x.nome)).join(", ") || "ninguém marcado"}</p>
       <p style="margin-top:6px"><strong>Podem sair:</strong> ${d.planos.fora.map((x) => esc(x.nome)).join(", ") || "ninguém marcado"}</p>
