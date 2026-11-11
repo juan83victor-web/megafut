@@ -99,6 +99,7 @@ function nomeSobrenome(nome) {
   return p[0] + " " + ultimo;
 }
 const ovr = (j) => (j.ovr ?? (j.nivel != null ? Math.round(j.nivel * 5) : "")); 
+const seloForma = (j) => j.forma === "alta" ? `<span class="forma alta" title="Vem de bons jogos">▲</span>` : j.forma === "baixa" ? `<span class="forma baixa" title="Vem mal">▼</span>` : j.forma === "normal" ? `<span class="forma normal" title="Forma mediana">●</span>` : "";
 const ovrMostra = (j) => (j.conhec != null && j.conhec < 100 && j.ovr_txt ? j.ovr_txt.replace(" a ", "~") : ovr(j));
 
 // ---------------------------------------------------------------------------
@@ -1098,18 +1099,26 @@ function desenharCampo() {
     const jid = E.vagas[i], x = porId[jid];
     const foraPos = x && ((x.pos !== v.pos && !(x.sec || []).includes(v.pos)) || (x.lado && v.pos === "LAT" && v.sigla !== v.pos && ("L" + x.lado) !== v.sigla));
     const cls = ["ficha", !x ? "vazia" : "", x && !x.disponivel ? "indisp" : "", foraPos ? "fora" : "", ehSel("vaga", i) ? "sel" : ""].join(" ");
-    return `<button class="${cls}" data-vaga="${i}" style="left:${v.x}%;top:${v.y}%"><span class="bola ${x ? corOvr(ovr(x)) : ""}">${x ? ovr(x) : "+"}</span>
+    return `<button class="${cls}" data-vaga="${i}" style="left:${v.x}%;top:${v.y}%"><span class="bola ${x ? corOvr(ovr(x)) : ""}">${x ? ovr(x) : "+"}${x ? seloForma(x) : ""}</span>
       <span class="rot">${x ? esc(nomeSobrenome(x.nome)) : "Vazio"}</span><span class="vpos">${esc(v.sigla || v.pos)}${x && x.num ? " · " + x.num : ""}${x && x.lesao ? " · DM" : ""}</span></button>`;
   };
   const reserva = (x, tipo) => `<button class="reserva ${ehSel(tipo, x.id) ? "sel" : ""}" data-${tipo}="${x.id}"><span class="pos">${esc(x.rotulo || x.pos)}</span>
     <span class="n">${esc(x.nome)}<span class="d">${x.num ? "camisa " + x.num + " · " : ""}condição ${x.condicao}% · moral ${x.moral}${!x.disponivel ? (x.lesao ? ` · <b style="color:#ff8a8a">DM ${x.lesao} dias</b>` : ` · <b style="color:#ff8a8a">suspenso</b>`) : ""}</span></span>
-    <span class="nivel ${corOvr(ovr(x))}">${ovr(x)}</span></button>`;
+    <span style="display:flex;align-items:center;flex:none">${seloForma(x)}<span class="nivel ${corOvr(ovr(x))}">${ovr(x)}</span></span></button>`;
   app.innerHTML = `
     <div class="entre"><h2>Elenco</h2><span class="minus">${d.jogadores.length} atletas</span></div>
     ${abasElenco()}
     <div class="grade2"><div class="campo"><label>Formação</label><select id="form">${d.formacoes.map((f) => `<option value="${f}" ${f === d.formacao ? "selected" : ""}>${f.split("").join(" ")}</option>`).join("")}</select></div>
       <div class="campo"><label>Estilo de jogo</label><select id="estilo">${d.estilos.map(([k, n]) => `<option value="${k}" ${k === d.estilo ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div></div>
     <p class="minus" style="margin:-4px 0 8px">${esc((d.estilos.find((e) => e[0] === d.estilo) || [])[2] || "")}</p>
+    ${d.ajustes ? `<div class="grade3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+      ${[["mentalidade", "Mentalidade", [[-2, "Muito defensiva"], [-1, "Defensiva"], [0, "Equilibrada"], [1, "Ofensiva"], [2, "Muito ofensiva"]]],
+         ["linha", "Linha", [[-1, "Baixa"], [0, "Média"], [1, "Alta"]]],
+         ["pressao", "Pressão", [[-1, "Baixa"], [0, "Média"], [1, "Alta"]]]].map(([k, rot, ops]) =>
+        `<div class="campo"><label>${rot}</label><select data-aj="${k}">${ops.map(([v, t]) => `<option value="${v}" ${v === d.ajustes[k] ? "selected" : ""}>${t}</option>`).join("")}</select></div>`).join("")}</div>
+      <p class="minus" style="margin:-2px 0 8px">Mais fechado leva menos gols e cria menos; mais aberto cria mais e deixa espaço atrás. Vale até contra time bem mais forte.</p>` : ""}
+    ${(d.auxiliar || []).length ? `<div class="cartao auxiliar" style="border-color:var(--cat,#4fd17c)"><div class="entre"><strong>🧢 Auxiliar técnico</strong><span class="minus">antes do jogo</span></div>
+      ${d.auxiliar.map((c, i) => `<div class="item" style="display:block;padding:6px 0"><div>${esc(c.texto)}</div>${c.sai && c.entra ? `<button class="btn sec peq" data-aux="${i}" style="margin-top:4px">Fazer essa troca</button>` : ""}</div>`).join("")}</div>` : ""}
     <div class="gramado">
       <svg class="marcas" viewBox="0 0 68 90" preserveAspectRatio="none" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".35">
         <rect x="1.5" y="1.5" width="65" height="87"/><line x1="1.5" y1="45" x2="66.5" y2="45"/><circle cx="34" cy="45" r="7"/>
@@ -1168,6 +1177,23 @@ function desenharCampo() {
     aviso("Formação trocada. O auxiliar sugeriu os onze: ajuste e salve se quiser.");
     desenharCampo();
   };
+  app.querySelectorAll("[data-aj]").forEach((sel) => sel.onchange = async () => {
+    const v = {}; app.querySelectorAll("[data-aj]").forEach((x) => { v[x.dataset.aj] = +x.value; });
+    S.esc.dados = await api("ajustes", v);
+    aviso("Ajuste tático salvo");
+    desenharCampo();
+  });
+  app.querySelectorAll("[data-aux]").forEach((b) => b.onclick = () => {
+    const c = d.auxiliar[+b.dataset.aux];
+    const i = E.vagas.indexOf(c.sai);
+    if (i < 0) return;
+    const bi = E.banco.indexOf(c.entra);
+    E.vagas[i] = c.entra;
+    if (bi >= 0) E.banco[bi] = c.sai; else if (E.banco.length < 7) E.banco.push(c.sai);
+    E.mudou = true; E.manual = true;
+    aviso("Troca feita. Salve a escalação para valer.");
+    desenharCampo();
+  });
   document.getElementById("estilo").onchange = async (ev) => {
     await api("tatica", { preset: ev.target.value });
     const nd = await api("escalacao");
@@ -1201,7 +1227,7 @@ function linhaJogador(j) {
   const dm = j.lesao_info ? `<div class="dm">DM: ${esc(j.lesao_info.diagnostico)} · volta ${esc(j.lesao_info.volta)} · ${j.lesao_info.jogos ? "perde " + plural(j.lesao_info.jogos, "jogo", "jogos") : "sem jogos no período"}</div>` : "";
   return `<button class="item" data-j="${j.id}"><span class="pos">${esc(j.rotulo || j.pos)}</span><div class="cresce"><div class="nome quebra">${esc(j.nome)}</div>
     <div class="minus">${textoIdade(j)} · moral ${j.moral} · ${plural(j.jogos, "jogo", "jogos")}${j.gols ? ", " + plural(j.gols, "gol", "gols") : ""}</div>${dm}
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span class="nivel ${corOvr(ovr(j))}">${ovrMostra(j)}</span></button>`;
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${sinais.join("")}</div></div><span style="display:flex;align-items:center;flex:none">${seloForma(j)}<span class="nivel ${corOvr(ovr(j))}">${ovrMostra(j)}</span></span></button>`;
 }
 async function abrirJogador(id, meu) {
   const f = folha(`<div class="vazio"><div class="anel"></div></div>`);
