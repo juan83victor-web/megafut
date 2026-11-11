@@ -6,4 +6,4 @@ MEGAFUT, APP PARA O CELULAR
 4. Abra o app uma vez com internet: ele baixa e guarda tudo (cerca de 25 MB) para funcionar sem rede.
 5. Para atualizar: substitua os arquivos pelos da pasta nova. O app avisa quando a versão nova chegar.
 
-Versão: d7edc1139b69
+Versão: 6f89d196bbf6

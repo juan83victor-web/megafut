@@ -1117,6 +1117,9 @@ function desenharCampo() {
          ["pressao", "Pressão", [[-1, "Baixa"], [0, "Média"], [1, "Alta"]]]].map(([k, rot, ops]) =>
         `<div class="campo"><label>${rot}</label><select data-aj="${k}">${ops.map(([v, t]) => `<option value="${v}" ${v === d.ajustes[k] ? "selected" : ""}>${t}</option>`).join("")}</select></div>`).join("")}</div>
       <p class="minus" style="margin:-2px 0 8px">Mais fechado leva menos gols e cria menos; mais aberto cria mais e deixa espaço atrás. Vale até contra time bem mais forte.</p>` : ""}
+    ${d.entrosamento ? `<div class="cartao"><div class="entre"><span class="sub">Entrosamento do onze</span><strong>${d.entrosamento.valor}/100</strong></div>
+      <div class="barra" style="margin:4px 0"><i style="width:${d.entrosamento.valor}%;${d.entrosamento.valor < 50 ? "background:var(--vermelho)" : ""}"></i></div>
+      <p class="minus">Integração ao grupo ${d.entrosamento.integracao} · continuidade de quem joga junto ${d.entrosamento.continuidade}. Sobe com treino entre os jogos e repetindo o time; cai com muitas mudanças e reforços recém chegados. Pesa no jogo: time entrosado rende mais em todos os lances.</p></div>` : ""}
     ${(d.auxiliar || []).length ? `<div class="cartao auxiliar" style="border-color:var(--cat,#4fd17c)"><div class="entre"><strong>🧢 Auxiliar técnico</strong><span class="minus">antes do jogo</span></div>
       ${d.auxiliar.map((c, i) => `<div class="item" style="display:block;padding:6px 0"><div>${esc(c.texto)}</div>${c.sai && c.entra ? `<button class="btn sec peq" data-aux="${i}" style="margin-top:4px">Fazer essa troca</button>` : ""}</div>`).join("")}</div>` : ""}
     <div class="gramado">
