@@ -1411,7 +1411,7 @@ async function telaDiretoria() {
       <div class="entre"><span class="sub">Potencial</span><strong>${esc(x.pot_txt || "")}</strong></div>
       <div class="entre"><span class="sub">Valor estimado</span><strong>${esc(x.valor_txt)}</strong></div>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn sec peq" data-ver="${x.id}">Ver ficha</button>
-      ${x.neg === "negociando" ? chip("Diretoria negociando", "al") : x.neg === "concluido" ? chip("Contratado", "ok") : x.neg === "falhou" ? `<span class="minus">${esc(x.neg_obs || "Sem acordo")}</span>` : `<button class="btn peq" data-quero="${p.id}:${x.id}">Quero contar com ele</button>`}</div></div>`;
+      ${x.neg === "negociando" ? chip("Diretoria negociando", "al") : x.neg === "concluido" ? chip("Contratado", "ok") : x.neg === "falhou" ? `<span class="minus">${esc(x.neg_obs || "Sem acordo")}</span>` : `<button class="btn sec peq" data-naoquero="${p.id}:${x.id}">Não quero</button><button class="btn peq" data-quero="${p.id}:${x.id}">Quero contar com ele</button>`}</div></div>`;
   const ESTADO = { buscando: ["Procurando", "al"], pronto: ["Nomes chegaram", "ok"], negociando: ["Negociando", "al"], concluido: ["Contratado", "ok"], falhou: ["Não deu certo", "ruim"], sem_nomes: ["Sem nomes viáveis", "ruim"], cancelado: ["Cancelado", ""] };
   app.innerHTML = `<h2>Diretoria</h2>
     <div class="cartao"><div class="entre"><span class="sub">Aprovação da torcida à diretoria</span><strong>${d.aprovacao}</strong></div>
@@ -1421,10 +1421,16 @@ async function telaDiretoria() {
     ${d.liberados.length ? `<div class="cartao"><strong>Reforço liberado</strong><p class="minus">A diretoria negociou alguém nestas posições: ${d.liberados.map((l) => esc(l.rotulo)).join(", ")}. Peça reforço abaixo.</p></div>` : ""}
     <h3>Pedir reforço</h3>
     <div class="abas" style="flex-wrap:wrap">${d.posicoes.map((p) => `<button class="aba ${S.pedirPos.includes(p.chave) ? "on" : ""}" data-pp="${p.chave}">${esc(p.rotulo)}</button>`).join("")}</div>
+    <div class="campo"><label>Perfil de contratação</label><select id="perfil">${d.perfis.map((p) => `<option value="${p.chave}" ${S.pedirPerfil === p.chave ? "selected" : ""}>${esc(p.rotulo)}</option>`).join("")}</select></div>
+    <p class="minus" style="margin:-4px 0 8px">${esc((d.perfis.find((p) => p.chave === (S.pedirPerfil || "titular")) || {}).texto || "")}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="campo"><label>Idade mínima</label><input type="number" id="imin" min="15" max="42" value="${S.idadeMin || 16}"></div>
+      <div class="campo"><label>Idade máxima</label><input type="number" id="imax" min="15" max="42" value="${S.idadeMax || 34}"></div></div>
     <button class="btn" id="pedir" ${S.pedirPos.length ? "" : "disabled"}>Pedir à diretoria (${S.pedirPos.length})</button>
     <p class="minus">A diretoria leva de 3 a 6 dias e traz até 4 nomes por posição. ${d.janela ? "" : "A janela está fechada: ela pode buscar, mas só fecha quando abrir (sem clube pode assinar a qualquer hora)."}</p>
     <h3>Pedidos</h3>
     ${d.pedidos.length ? d.pedidos.map((p) => `<div class="cartao"><div class="entre"><strong>${esc(p.rotulo)}</strong>${chip(ESTADO[p.estado] ? ESTADO[p.estado][0] : p.estado, ESTADO[p.estado] ? ESTADO[p.estado][1] : "")}</div>
+      <p class="minus">${esc(p.perfil)} · ${esc(p.idades)}</p>
       ${p.estado === "buscando" ? `<p class="minus">Previsão: ${esc(p.pronto_em)}</p>` : `<p class="minus">Pode escolher mais de um nome: a diretoria negocia todos ao mesmo tempo e para quando fechar com um.</p>`}
       <button class="btn sec peq" data-cancela="${p.id}" style="margin-top:6px">Encerrar pedido</button></div>
       ${p.sugestoes.map((x) => cartaoSug(p, x)).join("")}`).join("") : `<div class="vazio">Nenhum pedido em aberto.</div>`}
@@ -1437,7 +1443,14 @@ async function telaDiretoria() {
     <h3>Decisões da diretoria</h3>
     <div class="cartao lista">${d.decisoes.length ? d.decisoes.map(([dt, t]) => `<div class="item"><div class="cresce"><div class="minus">${esc(dt)}</div><div>${esc(t)}</div></div></div>`).join("") : `<p class="minus">Nada ainda.</p>`}</div>`;
   app.querySelectorAll("[data-pp]").forEach((b) => b.onclick = () => { const k = b.dataset.pp; S.pedirPos = S.pedirPos.includes(k) ? S.pedirPos.filter((x) => x !== k) : [...S.pedirPos, k]; telaDiretoria(); });
-  document.getElementById("pedir").onclick = async () => { try { const r = await api("diretoria_pedir", { posicoes: S.pedirPos }); S.pedirPos = []; aviso(r.texto); telaDiretoria(); } catch (e) { aviso(e.message); } };
+  document.getElementById("perfil").onchange = (ev) => { S.pedirPerfil = ev.target.value; telaDiretoria(); };
+  document.getElementById("imin").onchange = (ev) => { S.idadeMin = +ev.target.value; };
+  document.getElementById("imax").onchange = (ev) => { S.idadeMax = +ev.target.value; };
+  document.getElementById("pedir").onclick = async () => { try { const r = await api("diretoria_pedir", { posicoes: S.pedirPos, perfil: S.pedirPerfil || "titular", idade_min: S.idadeMin || 16, idade_max: S.idadeMax || 34 }); S.pedirPos = []; aviso(r.texto); telaDiretoria(); } catch (e) { aviso(e.message); } };
+  app.querySelectorAll("[data-naoquero]").forEach((b) => b.onclick = async () => {
+    const [p, x] = b.dataset.naoquero.split(":").map(Number);
+    try { aviso((await api("diretoria_descartar", { pedido: p, jogador: x })).texto); telaDiretoria(); } catch (e) { aviso(e.message); }
+  });
   app.querySelectorAll("[data-cancela]").forEach((b) => b.onclick = async () => { try { aviso((await api("diretoria_cancelar", { pedido: +b.dataset.cancela })).texto); telaDiretoria(); } catch (e) { aviso(e.message); } });
   app.querySelectorAll("[data-ver]").forEach((b) => b.onclick = () => abrirJogador(+b.dataset.ver, false));
   app.querySelectorAll("[data-quero]").forEach((b) => b.onclick = async () => {
