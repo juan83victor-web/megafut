@@ -33,7 +33,6 @@ self.addEventListener("activate", (evento) => {
 });
 
 self.addEventListener("fetch", (evento) => {
-  if (new URL(evento.request.url).pathname.indexOf("/arthur5anos/") !== -1) return;
   const pedido = evento.request;
   if (pedido.method !== "GET") return;
   const url = new URL(pedido.url);
